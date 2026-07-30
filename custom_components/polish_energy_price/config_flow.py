@@ -39,6 +39,7 @@ from .const import (
     METER_CLOCK_LOCAL,
     PRICE_SOURCE_CUSTOM,
     PRICE_SOURCE_REGULATED,
+    PRICE_SOURCE_TAURON_G13S,
     external_statistic_key,
 )
 from .tariff import OPERATOR_NAMES, get_tariff, groups_for, parse_day_hours
@@ -50,7 +51,20 @@ def _select(options: list[SelectOptionDict]) -> SelectSelector:
     )
 
 
-def _price_source_selector() -> SelectSelector:
+def _price_source_selector(operator: str, group: str) -> SelectSelector:
+    if operator == "tauron" and group.lower() == "g13s":
+        return _select(
+            [
+                SelectOptionDict(
+                    value=PRICE_SOURCE_CUSTOM,
+                    label="mój cennik — ceny brutto z umowy",
+                ),
+                SelectOptionDict(
+                    value=PRICE_SOURCE_TAURON_G13S,
+                    label="najnowsza oferta G13s TAURON — automatycznie",
+                ),
+            ]
+        )
     return _select(
         [
             SelectOptionDict(
@@ -128,17 +142,22 @@ def _tariff_schema(operator: str, defaults: dict[str, Any] | None = None) -> vol
 
 
 def _source_schema(
+    operator: str,
+    group: str,
     default: str = PRICE_SOURCE_REGULATED,
     external_statistics: bool = False,
 ) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(CONF_PRICE_SOURCE, default=default): _price_source_selector(),
-            vol.Required(
-                CONF_EXTERNAL_STATISTICS, default=external_statistics
-            ): BooleanSelector(),
-        }
-    )
+    tariff = get_tariff(operator, group)
+    schema: dict[Any, Any] = {
+        vol.Required(CONF_PRICE_SOURCE, default=default): _price_source_selector(
+            operator, group
+        )
+    }
+    if tariff.external_statistics_supported:
+        schema[
+            vol.Required(CONF_EXTERNAL_STATISTICS, default=external_statistics)
+        ] = BooleanSelector()
+    return vol.Schema(schema)
 
 
 def _prices_schema(
@@ -233,11 +252,26 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
         """Choose the energy seller price source."""
 
         if user_input is not None:
+            tariff = get_tariff(
+                self._data[CONF_OPERATOR], self._data[CONF_TARIFF]
+            )
+            if not tariff.external_statistics_supported:
+                user_input[CONF_EXTERNAL_STATISTICS] = False
             self._data.update(user_input)
             if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
                 return await self.async_step_custom_prices()
             return await self._next_after_prices()
-        return self.async_show_form(step_id="energy", data_schema=_source_schema())
+        operator = self._data[CONF_OPERATOR]
+        group = self._data[CONF_TARIFF]
+        default = (
+            PRICE_SOURCE_CUSTOM
+            if operator == "tauron" and group.lower() == "g13s"
+            else PRICE_SOURCE_REGULATED
+        )
+        return self.async_show_form(
+            step_id="energy",
+            data_schema=_source_schema(operator, group, default=default),
+        )
 
     async def async_step_custom_prices(
         self, user_input: dict[str, Any] | None = None
@@ -318,6 +352,8 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                     errors[CONF_DAY_HOURS] = "invalid_hours"
             if not errors:
                 self._options = user_input
+                if not get_tariff(operator, group).external_statistics_supported:
+                    self._options[CONF_EXTERNAL_STATISTICS] = False
                 if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
                     return await self.async_step_custom_prices()
                 return await self._next_after_prices()
@@ -325,17 +361,27 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
         schema: dict[Any, Any] = {
             vol.Required(
                 CONF_PRICE_SOURCE,
-                default=current.get(CONF_PRICE_SOURCE, PRICE_SOURCE_REGULATED),
-            ): _price_source_selector(),
+                default=current.get(
+                    CONF_PRICE_SOURCE,
+                    (
+                        PRICE_SOURCE_CUSTOM
+                        if operator == "tauron" and group.lower() == "g13s"
+                        else PRICE_SOURCE_REGULATED
+                    ),
+                ),
+            ): _price_source_selector(operator, group),
             vol.Required(
                 CONF_METER_CLOCK,
                 default=current.get(CONF_METER_CLOCK, METER_CLOCK_LOCAL),
             ): _meter_clock_selector(),
-            vol.Required(
-                CONF_EXTERNAL_STATISTICS,
-                default=current.get(CONF_EXTERNAL_STATISTICS, False),
-            ): BooleanSelector(),
         }
+        if get_tariff(operator, group).external_statistics_supported:
+            schema[
+                vol.Required(
+                    CONF_EXTERNAL_STATISTICS,
+                    default=current.get(CONF_EXTERNAL_STATISTICS, False),
+                )
+            ] = BooleanSelector()
         if operator == "enea" and group == "G12":
             schema[
                 vol.Optional(

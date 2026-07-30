@@ -23,7 +23,7 @@
       },
       "energy": {
         "title": "Wybierz źródło ceny energii",
-        "description": "Ceny sprzedawcy z urzędu są sprawdzane w oficjalnym arkuszu URE co 12 godzin. Jeśli zmieniono sprzedawcę lub wybrano ofertę komercyjną, podaj ceny brutto z umowy.",
+        "description": "Ceny sprzedawcy z urzędu są sprawdzane w arkuszu URE co 12 godzin. Dla G13s można użyć własnego cennika albo najnowszej oferty ze strony TAURON. Ponieważ cena G13s jest gwarantowana przez okres umowy, wybierz automat tylko wtedy, gdy odpowiada Twojemu cennikowi.",
         "data": {
           "price_source": "Źródło ceny energii",
           "external_statistics": "Utwórz koszty dla zewnętrznych statystyk zużycia"
@@ -34,7 +34,7 @@
       },
       "custom_prices": {
         "title": "Podaj ceny energii brutto",
-        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh. Integracja osobno doliczy dystrybucję.",
+        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh. Integracja osobno doliczy dystrybucję. G13s wymaga czterech zestawów po trzy ceny zgodnie z cennikiem umowy.",
         "data": {
           "calodobowa": "Strefa całodobowa",
           "dzienna": "Strefa dzienna",
@@ -43,7 +43,19 @@
           "pozaszczytowa": "Strefa pozaszczytowa",
           "szczyt_przedpoludniowy": "Szczyt przedpołudniowy",
           "szczyt_popoludniowy": "Szczyt popołudniowy",
-          "pozostale": "Pozostałe godziny"
+          "pozostale": "Pozostałe godziny",
+          "zima_dzien_roboczy_dzienna_pozaszczytowa": "Zima, dzień roboczy — strefa dzienna pozaszczytowa",
+          "zima_dzien_roboczy_dzienna_szczytowa": "Zima, dzień roboczy — strefa dzienna szczytowa",
+          "zima_dzien_roboczy_nocna": "Zima, dzień roboczy — strefa nocna",
+          "zima_dzien_wolny_dzienna_pozaszczytowa": "Zima, dzień wolny — strefa dzienna pozaszczytowa",
+          "zima_dzien_wolny_dzienna_szczytowa": "Zima, dzień wolny — strefa dzienna szczytowa",
+          "zima_dzien_wolny_nocna": "Zima, dzień wolny — strefa nocna",
+          "lato_dzien_roboczy_dzienna_pozaszczytowa": "Lato, dzień roboczy — strefa dzienna pozaszczytowa",
+          "lato_dzien_roboczy_dzienna_szczytowa": "Lato, dzień roboczy — strefa dzienna szczytowa",
+          "lato_dzien_roboczy_nocna": "Lato, dzień roboczy — strefa nocna",
+          "lato_dzien_wolny_dzienna_pozaszczytowa": "Lato, dzień wolny — strefa dzienna pozaszczytowa",
+          "lato_dzien_wolny_dzienna_szczytowa": "Lato, dzień wolny — strefa dzienna szczytowa",
+          "lato_dzien_wolny_nocna": "Lato, dzień wolny — strefa nocna"
         }
       },
       "external_statistics": {
@@ -80,7 +92,7 @@
       },
       "custom_prices": {
         "title": "Podaj ceny energii brutto",
-        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh.",
+        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh. G13s wymaga czterech zestawów po trzy ceny zgodnie z cennikiem umowy.",
         "data": {
           "calodobowa": "Strefa całodobowa",
           "dzienna": "Strefa dzienna",
@@ -89,7 +101,19 @@
           "pozaszczytowa": "Strefa pozaszczytowa",
           "szczyt_przedpoludniowy": "Szczyt przedpołudniowy",
           "szczyt_popoludniowy": "Szczyt popołudniowy",
-          "pozostale": "Pozostałe godziny"
+          "pozostale": "Pozostałe godziny",
+          "zima_dzien_roboczy_dzienna_pozaszczytowa": "Zima, dzień roboczy — strefa dzienna pozaszczytowa",
+          "zima_dzien_roboczy_dzienna_szczytowa": "Zima, dzień roboczy — strefa dzienna szczytowa",
+          "zima_dzien_roboczy_nocna": "Zima, dzień roboczy — strefa nocna",
+          "zima_dzien_wolny_dzienna_pozaszczytowa": "Zima, dzień wolny — strefa dzienna pozaszczytowa",
+          "zima_dzien_wolny_dzienna_szczytowa": "Zima, dzień wolny — strefa dzienna szczytowa",
+          "zima_dzien_wolny_nocna": "Zima, dzień wolny — strefa nocna",
+          "lato_dzien_roboczy_dzienna_pozaszczytowa": "Lato, dzień roboczy — strefa dzienna pozaszczytowa",
+          "lato_dzien_roboczy_dzienna_szczytowa": "Lato, dzień roboczy — strefa dzienna szczytowa",
+          "lato_dzien_roboczy_nocna": "Lato, dzień roboczy — strefa nocna",
+          "lato_dzien_wolny_dzienna_pozaszczytowa": "Lato, dzień wolny — strefa dzienna pozaszczytowa",
+          "lato_dzien_wolny_dzienna_szczytowa": "Lato, dzień wolny — strefa dzienna szczytowa",
+          "lato_dzien_wolny_nocna": "Lato, dzień wolny — strefa nocna"
         }
       },
       "external_statistics": {

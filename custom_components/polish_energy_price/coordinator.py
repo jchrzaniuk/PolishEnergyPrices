@@ -1,4 +1,4 @@
-"""Periodic refresh of regulated energy and official distribution prices."""
+"""Periodic refresh of official energy and distribution prices."""
 
 from __future__ import annotations
 
@@ -21,20 +21,24 @@ from .const import (
     CONF_PRICE_SOURCE,
     CONF_TARIFF,
     DOMAIN,
-    PRICE_SOURCE_CUSTOM,
+    PRICE_SOURCE_REGULATED,
+    PRICE_SOURCE_TAURON_G13S,
 )
 from .tariff import get_tariff
 from .official import (
     OZE_RATES_PAGE,
     OPERATOR_PAGES,
+    TAURON_G13S_PAGE,
     cogeneration_document_from_eli,
     discover_distribution_document,
     discover_quality_document,
+    discover_tauron_g13s_script,
     eli_search_url,
     oze_rate_from_page,
     parse_cogeneration_rate_pdf,
     parse_distribution_pdf,
     parse_quality_rate_pdf,
+    parse_tauron_g13s_prices,
 )
 from .ure import URE_OFFERS_PAGE, discover_workbook_url, parse_ure_workbook
 
@@ -93,7 +97,7 @@ class EnergyPriceData:
 
 
 class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
-    """Check the stable URE page and cache the latest valid workbook result."""
+    """Check official sources and cache the latest complete valid result."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.entry = entry
@@ -101,7 +105,9 @@ class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
         self.group = str(entry.data[CONF_TARIFF])
         self.tariff = get_tariff(self.operator, self.group)
         settings = {**entry.data, **entry.options}
-        self.use_ure = settings.get(CONF_PRICE_SOURCE) != PRICE_SOURCE_CUSTOM
+        source = settings.get(CONF_PRICE_SOURCE, PRICE_SOURCE_REGULATED)
+        self.use_ure = source == PRICE_SOURCE_REGULATED
+        self.use_tauron_g13s = source == PRICE_SOURCE_TAURON_G13S
         self.store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}"
         )
@@ -143,13 +149,15 @@ class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
                             {"quality": 0.0332, "oze": 0.0073, "cogeneration": 0.0030},
                         )
                     )
+                    stored_source = str(stored.get("source", "bundled"))
+                    if stored.get("source_url"):
+                        if stored_source.startswith("tauron_g13s"):
+                            stored_source = "tauron_g13s_cache"
+                        elif stored_source.startswith("ure"):
+                            stored_source = "ure_cache"
                     self.data = EnergyPriceData(
                         prices=prices,
-                        source=(
-                            "ure_cache"
-                            if stored.get("source_url")
-                            else str(stored.get("source", "bundled"))
-                        ),
+                        source=stored_source,
                         source_url=stored.get("source_url"),
                         last_checked=stored.get("last_checked"),
                         last_updated=stored.get("last_updated"),
@@ -224,6 +232,8 @@ class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
     async def _refresh_energy(
         self, current: EnergyPriceData, checked: str
     ) -> EnergyPriceData:
+        if self.use_tauron_g13s:
+            return await self._refresh_tauron_g13s(current, checked)
         if not self.use_ure:
             return replace(current, error=None)
         try:
@@ -264,6 +274,39 @@ class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
             return replace(
                 current,
                 source="ure_cache" if current.source_url else "bundled",
+                last_checked=checked,
+                error=str(err),
+            )
+
+    async def _refresh_tauron_g13s(
+        self, current: EnergyPriceData, checked: str
+    ) -> EnergyPriceData:
+        """Refresh the current offer published on the official TAURON page."""
+
+        try:
+            page = (await self._get_bytes(TAURON_G13S_PAGE, MAX_PAGE_BYTES)).decode(
+                "utf-8", errors="replace"
+            )
+            script_url = discover_tauron_g13s_script(page)
+            script = (await self._get_bytes(script_url, MAX_PAGE_BYTES)).decode(
+                "utf-8", errors="replace"
+            )
+            parsed = self._validated_prices(parse_tauron_g13s_prices(script))
+            changed = current.prices != parsed or current.source_url != script_url
+            return replace(
+                current,
+                prices=parsed,
+                source="tauron_g13s",
+                source_url=script_url,
+                last_checked=checked,
+                last_updated=checked if changed else current.last_updated,
+                error=None,
+            )
+        except (ClientError, TimeoutError, UnicodeError, ValueError) as err:
+            _LOGGER.warning("G13s energy price refresh failed: %s", err)
+            return replace(
+                current,
+                source="tauron_g13s_cache" if current.source_url else "bundled",
                 last_checked=checked,
                 error=str(err),
             )

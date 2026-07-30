@@ -106,6 +106,8 @@ class ExternalCostStatisticsManager:
                 _LOGGER.exception("Could not refresh external cost statistics")
 
     async def _async_refresh(self) -> None:
+        if not self.tariff.external_statistics_supported:
+            return
         if not self._settings().get(CONF_EXTERNAL_STATISTICS, False):
             return
         mappings = self._mappings()

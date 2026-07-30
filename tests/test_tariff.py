@@ -26,8 +26,8 @@ def at(value: str) -> datetime:
 
 
 class TariffTests(unittest.TestCase):
-    def test_all_19_regulated_tariffs_cover_every_hour_of_2026(self) -> None:
-        self.assertEqual(19, len(tariff.TARIFFS))
+    def test_all_20_tariffs_cover_every_hour_of_2026(self) -> None:
+        self.assertEqual(20, len(tariff.TARIFFS))
         instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
         end = datetime(2027, 1, 1, tzinfo=timezone.utc)
         while instant < end:
@@ -67,6 +67,48 @@ class TariffTests(unittest.TestCase):
                 for zone in definition.zones
             },
         )
+
+    def test_tauron_g13s_uses_season_day_type_and_hour(self) -> None:
+        definition = tariff.get_tariff("tauron", "g13s")
+        cases = {
+            "2026-01-15T08:00:00+01:00": (
+                "zima_dzien_roboczy_dzienna_szczytowa",
+                0.3332,
+            ),
+            "2026-01-15T12:00:00+01:00": (
+                "zima_dzien_roboczy_dzienna_pozaszczytowa",
+                0.1999,
+            ),
+            "2026-01-17T12:00:00+01:00": (
+                "zima_dzien_wolny_dzienna_pozaszczytowa",
+                0.1200,
+            ),
+            "2026-07-15T10:00:00+02:00": (
+                "lato_dzien_roboczy_dzienna_pozaszczytowa",
+                0.1000,
+            ),
+            "2026-07-19T18:00:00+02:00": (
+                "lato_dzien_wolny_dzienna_szczytowa",
+                0.1176,
+            ),
+            "2026-07-19T23:00:00+02:00": (
+                "lato_dzien_wolny_nocna",
+                0.1094,
+            ),
+        }
+        for timestamp, (zone, network_rate) in cases.items():
+            with self.subTest(timestamp=timestamp):
+                result = tariff.price_at(definition, at(timestamp))
+                self.assertEqual(zone, result.zone_key)
+                self.assertEqual(network_rate, definition.distribution_net[zone])
+
+    def test_tauron_g13s_treats_holiday_as_free_day(self) -> None:
+        definition = tariff.get_tariff("tauron", "G13s")
+        self.assertEqual(
+            "zima_dzien_wolny_dzienna_pozaszczytowa",
+            tariff.zone_at(definition, at("2026-12-24T12:00:00+01:00")),
+        )
+        self.assertFalse(definition.external_statistics_supported)
 
     def test_pge_g12_changes_hours_between_seasons(self) -> None:
         definition = tariff.get_tariff("pge", "G12")

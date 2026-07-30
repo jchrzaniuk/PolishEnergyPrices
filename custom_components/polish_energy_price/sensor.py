@@ -209,6 +209,10 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
         source_names = {
             "ure": "aktualny arkusz URE",
             "ure_cache": "ostatni poprawny arkusz URE z pamięci podręcznej",
+            "tauron_g13s": "aktualny oficjalny cennik G13s TAURON",
+            "tauron_g13s_cache": (
+                "ostatni poprawny cennik G13s TAURON z pamięci podręcznej"
+            ),
             "bundled": "zweryfikowane stawki wbudowane",
         }
         attributes: dict[str, Any] = {
@@ -267,12 +271,12 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
         if not custom:
             attributes.update(
                 {
-                    "Źródło ceny energii URE": self.coordinator.data.source_url,
-                    "Ostatnia kontrola ceny URE": self.coordinator.data.last_checked,
-                    "Ostatnia aktualizacja ceny URE": (
+                    "Adres źródła ceny energii": self.coordinator.data.source_url,
+                    "Ostatnia kontrola ceny energii": self.coordinator.data.last_checked,
+                    "Ostatnia aktualizacja ceny energii": (
                         self.coordinator.data.last_updated
                     ),
-                    "Ostatni błąd ceny URE": self.coordinator.data.error or "Brak",
+                    "Ostatni błąd ceny energii": self.coordinator.data.error or "Brak",
                 }
             )
         return attributes

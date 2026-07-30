@@ -100,6 +100,57 @@ class OfficialTariffTests(unittest.TestCase):
             rates,
         )
 
+    def test_discovers_and_parses_current_tauron_g13s_prices(self) -> None:
+        page = '<script src="/-/media/taryfa-g13s-serwisant.js?v=9"></script>'
+        self.assertEqual(
+            "https://www.tauron.pl/-/media/taryfa-g13s-serwisant.js?v=9",
+            official.discover_tauron_g13s_script(page),
+        )
+        script = """
+        sellingPrices: {
+          1: ['0,8723', '0,6827', '0,8723', '0,6089'],
+          2: ['0,5258', '0,4121', '0,5258', '0,6089'],
+          3: ['0,8723', '0,3383', '0,8723', '0,6212'],
+          4: ['0,3526', '0,1390', '0,3526', '0,6212'],
+        },
+        distributionPrices: {}
+        """
+        prices = official.parse_tauron_g13s_prices(script)
+        self.assertEqual(12, len(prices))
+        self.assertEqual(
+            0.6827, prices["zima_dzien_roboczy_dzienna_pozaszczytowa"]
+        )
+        self.assertEqual(0.3526, prices["lato_dzien_wolny_dzienna_szczytowa"])
+
+    def test_parses_four_tauron_g13s_distribution_rows(self) -> None:
+        text = (
+            """
+        Taryfa TAURON Dystrybucja na rok 2026
+        G13s (lato, dzień roboczy¹) 0,1000 0,2842 0,1094 7,38 10,86
+        G13s (lato, dzień wolny²) 0,0400 0,1176 0,1094 7,38 10,86
+        G13s (zima, dzień roboczy¹) 0,1999 0,3332 0,1094 7,38 10,86
+        G13s (zima, dzień wolny²) 0,1200 0,1960 0,1094 7,38 10,86
+        """
+            + "x" * 600
+        )
+        zones = tuple(
+            f"{period}_{zone}"
+            for period in (
+                "zima_dzien_roboczy",
+                "zima_dzien_wolny",
+                "lato_dzien_roboczy",
+                "lato_dzien_wolny",
+            )
+            for zone in ("dzienna_pozaszczytowa", "dzienna_szczytowa", "nocna")
+        )
+        with patch.object(official, "extract_pdf_text", return_value=text):
+            rates = official.parse_distribution_pdf(
+                b"ignored", "tauron", "G13s", zones, 2026
+            )
+        self.assertEqual(12, len(rates))
+        self.assertEqual(0.3332, rates["zima_dzien_roboczy_dzienna_szczytowa"])
+        self.assertEqual(0.0400, rates["lato_dzien_wolny_dzienna_pozaszczytowa"])
+
     def test_rejects_partial_network_rates(self) -> None:
         text = "Taryfa 2026\nG12 0,2841\n" + "x" * 600
         with patch.object(official, "extract_pdf_text", return_value=text):

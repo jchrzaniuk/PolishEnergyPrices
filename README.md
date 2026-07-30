@@ -24,14 +24,14 @@ cache, a przy pierwszym uruchomieniu — zweryfikowane stawki wbudowane.
 
 | OSD | Sprzedawca z urzędu | Taryfy z kompletną ceną energii |
 |---|---|---|
-| TAURON Dystrybucja | TAURON Sprzedaż | G11, G12, G12w, G13 |
+| TAURON Dystrybucja | TAURON Sprzedaż | G11, G12, G12w, G13, G13s |
 | PGE Dystrybucja | PGE Obrót | G11, G12, G12w, G12n |
 | ENERGA-OPERATOR | ENERGA-OBRÓT | G11, G12, G12w, G12r |
 | Stoen Operator | E.ON Polska | G11, G12, G12w, G12as |
 | ENEA Operator | ENEA S.A. | G11, G12, G12w |
 
-Lista w formularzu zależy od wybranego OSD. Integracja nie pokazuje taryf, dla
-których w materiałach nie ma kompletnej, regulowanej ceny energii.
+Lista w formularzu zależy od wybranego OSD. Dla G13s cena energii pochodzi z
+cennika ofertowego TAURON, a nie z taryfy sprzedawcy z urzędu w arkuszu URE.
 
 ## Instalacja
 
@@ -57,6 +57,30 @@ uruchom Home Assistant ponownie.
 5. Wybierz źródło ceny energii:
    - automatyczne ceny URE — jeżeli masz sprzedawcę z urzędu z tabeli powyżej;
    - własne ceny brutto — jeżeli zmieniłeś sprzedawcę lub ofertę.
+
+### TAURON G13s
+
+G13s rozróżnia lato i zimę, dzień roboczy i wolny oraz trzy strefy w każdym z
+tych okresów. Integracja uwzględnia wszystkie 12 kombinacji stawek, polskie
+święta ustawowe i następujące godziny opisane przez
+[TAURON Dystrybucja](https://www.tauron.pl/tauron/tauron-dystrybucja%2C-d-%2Cpl/grupa-taryfowa-g13s):
+
+| Okres | Dzienna pozaszczytowa | Dzienna szczytowa | Nocna |
+|---|---|---|---|
+| 1.04–30.09 | 9:00–17:00 | 7:00–9:00, 17:00–21:00 | 21:00–7:00 |
+| 1.10–31.03 | 10:00–15:00 | 7:00–10:00, 15:00–21:00 | 21:00–7:00 |
+
+W formularzu G13s są dwa źródła ceny energii:
+
+- **mój cennik** — bezpieczny wybór dla trwającej umowy; należy przepisać 12
+  cen brutto z własnego cennika TAURON;
+- **najnowsza oferta G13s TAURON** — integracja co 12 godzin odczytuje tabelę
+  cen z [oficjalnej strony produktu](https://www.tauron.pl/dla-domu/prad/prad-z-usluga/tanie-godziny).
+
+TAURON gwarantuje stawki G13s przez okres obowiązywania konkretnego cennika.
+Publikacja nowszej oferty dla nowych umów nie zmienia automatycznie ceny już
+zawartej umowy, dlatego źródło automatyczne wybieraj tylko wtedy, gdy nazwa i
+stawki aktualnej oferty odpowiadają Twojemu cennikowi.
 
 Dla ENEA G12 sprawdź godziny na umowie albo liczniku. Taryfa określa liczbę
 godzin, ale konkretne przedziały ustala operator; domyślne `6-13,15-22` można
@@ -167,6 +191,12 @@ Ta opcja jest odseparowana od zwykłej encji ceny. Liczniki udostępniające enc
 własny podlicznik — nadal korzystają bezpośrednio z sensora bieżącej ceny i nie
 wymagają włączania mostu.
 
+Most statystyk strefowych nie jest oferowany dla G13s. W tej grupie cena zmienia
+się jednocześnie według godziny, pory roku i rodzaju dnia, a importer musiałby
+udostępniać godzinowe zużycie zamiast zwykłych trzech rejestrów strefowych.
+Encjowy licznik `kWh` nadal działa prawidłowo z sensorem bieżącej ceny w panelu
+Energia.
+
 ## Co dokładnie zawiera cena
 
 Stan encji to koszt krańcowy:
@@ -192,7 +222,8 @@ zużycia.
 Automatyzacja rozdziela źródła zgodnie z tym, kto ustala daną opłatę:
 
 - cena energii czynnej — najnowszy arkusz XLSX dla gospodarstw domowych na
-  stronie URE „Masz wybór”;
+  stronie URE „Masz wybór”; dla automatycznego wariantu G13s — tabela cen
+  najnowszej oferty na oficjalnej stronie TAURON;
 - składnik zmienny sieciowy i stawka jakościowa — aktualna taryfa lub wyciąg
   opublikowany przez właściwego OSD; dla ENEA i ENERGA używany jest również
   oficjalny serwis dokumentów ENERGA, a dla PGE jego dokument operatora;
@@ -224,6 +255,6 @@ python3 -m unittest discover -s tests -v
 python3 -m compileall -q custom_components tests
 ```
 
-Sprawdzane jest m.in. pokrycie każdej godziny 2026 r. dla wszystkich 19 taryf,
+Sprawdzane jest m.in. pokrycie każdej godziny 2026 r. dla wszystkich 20 taryf,
 zmiany sezonowe, weekendy, święta (w tym Wigilia), własne godziny ENEA G12 oraz
 licznik pracujący stale według czasu zimowego.

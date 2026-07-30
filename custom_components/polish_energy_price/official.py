@@ -20,6 +20,7 @@ from pypdf.errors import PdfReadError
 
 OZE_RATES_PAGE = "https://bip.ure.gov.pl/bip/odnawialne-zrodla-energ/stawki-oplaty-oze"
 ELI_API = "https://api.sejm.gov.pl/eli"
+TAURON_G13S_PAGE = "https://www.tauron.pl/dla-domu/prad/prad-z-usluga/tanie-godziny"
 
 OPERATOR_PAGES: dict[str, str] = {
     "tauron": (
@@ -87,6 +88,62 @@ def _links(page: str, base_url: str) -> list[DocumentLink]:
 def _is_http_url(url: str) -> bool:
     parsed = urlparse(url)
     return parsed.scheme == "https" and bool(parsed.netloc)
+
+
+def discover_tauron_g13s_script(
+    page: str, base_url: str = TAURON_G13S_PAGE
+) -> str:
+    """Find the official JavaScript table containing current G13s prices."""
+
+    candidates = re.findall(
+        r"<script[^>]+src=[\"']([^\"']*taryfa-g13s[^\"']*\.js(?:\?[^\"']*)?)[\"']",
+        page,
+        re.IGNORECASE,
+    )
+    for candidate in candidates:
+        url = urljoin(base_url, candidate.replace("&amp;", "&"))
+        parsed = urlparse(url)
+        if parsed.scheme == "https" and parsed.hostname in {"tauron.pl", "www.tauron.pl"}:
+            return url
+    raise ValueError("Na stronie TAURON nie znaleziono tabeli cen G13s")
+
+
+def parse_tauron_g13s_prices(script: str) -> dict[str, float]:
+    """Parse gross hourly energy prices from the official G13s price table."""
+
+    block = re.search(
+        r"sellingPrices\s*:\s*\{(.*?)\}\s*,\s*distributionPrices",
+        script,
+        re.DOTALL,
+    )
+    if not block:
+        raise ValueError("Tabela TAURON nie zawiera cen sprzedażowych G13s")
+
+    periods = (
+        "zima_dzien_roboczy",
+        "zima_dzien_wolny",
+        "lato_dzien_roboczy",
+        "lato_dzien_wolny",
+    )
+    result: dict[str, float] = {}
+    for index, period in enumerate(periods, start=1):
+        row = re.search(rf"(?m)^\s*{index}\s*:\s*\[(.*?)\]", block.group(1), re.DOTALL)
+        if not row:
+            raise ValueError(f"Brak zestawu cen G13s nr {index}")
+        values = [
+            float(value.replace(",", "."))
+            for value in re.findall(r"[\"']([0-9]+[,.][0-9]{4})[\"']", row.group(1))
+        ]
+        if (
+            len(values) != 4
+            or values[0] != values[2]
+            or any(not 0 < value < 10 for value in values)
+        ):
+            raise ValueError(f"Niewiarygodny zestaw cen G13s nr {index}")
+        result[f"{period}_dzienna_pozaszczytowa"] = values[1]
+        result[f"{period}_dzienna_szczytowa"] = values[0]
+        result[f"{period}_nocna"] = values[3]
+    return result
 
 
 def discover_distribution_document(
@@ -276,6 +333,33 @@ def _row_rates(text: str, group: str, zones: int) -> list[float]:
     raise ValueError(f"Nie znaleziono kompletnego wiersza {group}")
 
 
+def _tauron_g13s_rates(text: str, zone_keys: tuple[str, ...]) -> dict[str, float]:
+    """Read the four seasonal/day-type G13s network-rate rows."""
+
+    names = (
+        ("lato", "dzień roboczy", "lato_dzien_roboczy"),
+        ("lato", "dzień wolny", "lato_dzien_wolny"),
+        ("zima", "dzień roboczy", "zima_dzien_roboczy"),
+        ("zima", "dzień wolny", "zima_dzien_wolny"),
+    )
+    result: dict[str, float] = {}
+    for season, day_type, key in names:
+        row = re.search(
+            rf"(?mi)^\s*G13s\s*\(\s*{season}\s*,\s*{day_type}[^)]*\)\s+([^\n]+)$",
+            text,
+        )
+        if not row:
+            raise ValueError(f"Nie znaleziono wiersza G13s ({season}, {day_type})")
+        values = [value for value in _four_decimal_values(row.group(1)) if value < 1.5]
+        values = _validate_distribution(values[:3], 3)
+        result[f"{key}_dzienna_pozaszczytowa"] = values[0]
+        result[f"{key}_dzienna_szczytowa"] = values[1]
+        result[f"{key}_nocna"] = values[2]
+    if set(result) != set(zone_keys):
+        raise ValueError("Niepełny zestaw stref dystrybucyjnych G13s")
+    return {zone: result[zone] for zone in zone_keys}
+
+
 def _enea_rates(text: str, group: str, zones: int) -> list[float]:
     block = re.search(rf"(?ms)^\s*{re.escape(group)}\b(.*?)(?=^\s*G[0-9][^\n]*$)", text)
     if not block:
@@ -363,6 +447,8 @@ def parse_distribution_pdf(
     if str(year) not in text:
         raise ValueError(f"Dokument nie potwierdza roku {year}")
     zones = len(zone_keys)
+    if operator == "tauron" and group.lower() == "g13s":
+        return _tauron_g13s_rates(text, zone_keys)
     if operator in ("tauron", "energa"):
         values = _row_rates(text, group, zones)
     elif operator == "enea":

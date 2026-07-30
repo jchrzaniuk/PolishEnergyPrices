@@ -1,9 +1,10 @@
 """Pure-Python model of Polish household electricity tariffs for 2026.
 
-Energy prices are gross regulated prices of the default seller in each OSD
-area. Distribution rates in ``TARIFFS`` are net; the calculator adds all
-variable system charges and VAT. Fixed monthly fees are deliberately excluded
-because they do not change the marginal cost of one kWh.
+Energy prices are gross and include excise duty. Most come from regulated
+default-seller tariffs; G13s uses the official TAURON commercial offer.
+Distribution rates in ``TARIFFS`` are net; the calculator adds all variable
+system charges and VAT. Fixed monthly fees are deliberately excluded because
+they do not change the marginal cost of one kWh.
 """
 
 from __future__ import annotations
@@ -47,6 +48,37 @@ ZONE_LABELS: dict[str, str] = {
     "pozostale": "pozostałe godziny",
 }
 
+G13S_PERIODS = (
+    "zima_dzien_roboczy",
+    "zima_dzien_wolny",
+    "lato_dzien_roboczy",
+    "lato_dzien_wolny",
+)
+G13S_BASE_ZONES = ("dzienna_pozaszczytowa", "dzienna_szczytowa", "nocna")
+G13S_ZONES = tuple(
+    f"{period}_{zone}" for period in G13S_PERIODS for zone in G13S_BASE_ZONES
+)
+_G13S_PERIOD_LABELS = {
+    "zima_dzien_roboczy": "zima, dzień roboczy",
+    "zima_dzien_wolny": "zima, dzień wolny",
+    "lato_dzien_roboczy": "lato, dzień roboczy",
+    "lato_dzien_wolny": "lato, dzień wolny",
+}
+_G13S_ZONE_LABELS = {
+    "dzienna_pozaszczytowa": "dzienna pozaszczytowa",
+    "dzienna_szczytowa": "dzienna szczytowa",
+    "nocna": "nocna",
+}
+ZONE_LABELS.update(
+    {
+        f"{period}_{zone}": (
+            f"{_G13S_ZONE_LABELS[zone]} — {_G13S_PERIOD_LABELS[period]}"
+        )
+        for period in G13S_PERIODS
+        for zone in G13S_BASE_ZONES
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Season:
@@ -70,6 +102,7 @@ class TariffDefinition:
     off_peak_zone: str | None = None
     off_peak_days: str = "weekend_holiday"
     description: str = ""
+    external_statistics_supported: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +170,26 @@ TAURON_G13_SEASONS = (
         (3, 31),
     ),
 )
+TAURON_G13S_SEASONS = (
+    _season(
+        {
+            "dzienna_pozaszczytowa": ((9, 17),),
+            "dzienna_szczytowa": ((7, 9), (17, 21)),
+            "nocna": ((21, 7),),
+        },
+        (4, 1),
+        (9, 30),
+    ),
+    _season(
+        {
+            "dzienna_pozaszczytowa": ((10, 15),),
+            "dzienna_szczytowa": ((7, 10), (15, 21)),
+            "nocna": ((21, 7),),
+        },
+        (10, 1),
+        (3, 31),
+    ),
+)
 
 
 def _tariff(
@@ -150,6 +203,7 @@ def _tariff(
     off_peak_zone: str | None = None,
     off_peak_days: str = "weekend_holiday",
     description: str = "",
+    external_statistics_supported: bool = True,
 ) -> TariffDefinition:
     return TariffDefinition(
         operator,
@@ -161,6 +215,7 @@ def _tariff(
         off_peak_zone,
         off_peak_days,
         description,
+        external_statistics_supported,
     )
 
 
@@ -214,6 +269,42 @@ TARIFFS: dict[tuple[str, str], TariffDefinition] = {
         },
         off_peak_zone="pozostale",
         description="trójstrefowa sezonowa",
+    ),
+    ("tauron", "G13s"): _tariff(
+        "tauron",
+        "G13s",
+        G13S_ZONES,
+        TAURON_G13S_SEASONS,
+        {
+            "zima_dzien_roboczy_dzienna_pozaszczytowa": 0.1999,
+            "zima_dzien_roboczy_dzienna_szczytowa": 0.3332,
+            "zima_dzien_roboczy_nocna": 0.1094,
+            "zima_dzien_wolny_dzienna_pozaszczytowa": 0.1200,
+            "zima_dzien_wolny_dzienna_szczytowa": 0.1960,
+            "zima_dzien_wolny_nocna": 0.1094,
+            "lato_dzien_roboczy_dzienna_pozaszczytowa": 0.1000,
+            "lato_dzien_roboczy_dzienna_szczytowa": 0.2842,
+            "lato_dzien_roboczy_nocna": 0.1094,
+            "lato_dzien_wolny_dzienna_pozaszczytowa": 0.0400,
+            "lato_dzien_wolny_dzienna_szczytowa": 0.1176,
+            "lato_dzien_wolny_nocna": 0.1094,
+        },
+        {
+            "zima_dzien_roboczy_dzienna_pozaszczytowa": 0.6827,
+            "zima_dzien_roboczy_dzienna_szczytowa": 0.8723,
+            "zima_dzien_roboczy_nocna": 0.6089,
+            "zima_dzien_wolny_dzienna_pozaszczytowa": 0.4121,
+            "zima_dzien_wolny_dzienna_szczytowa": 0.5258,
+            "zima_dzien_wolny_nocna": 0.6089,
+            "lato_dzien_roboczy_dzienna_pozaszczytowa": 0.3383,
+            "lato_dzien_roboczy_dzienna_szczytowa": 0.8723,
+            "lato_dzien_roboczy_nocna": 0.6212,
+            "lato_dzien_wolny_dzienna_pozaszczytowa": 0.1390,
+            "lato_dzien_wolny_dzienna_szczytowa": 0.3526,
+            "lato_dzien_wolny_nocna": 0.6212,
+        },
+        description="wielostrefowa sezonowa Tanie Godziny",
+        external_statistics_supported=False,
     ),
     ("pge", "G11"): _tariff(
         "pge",
@@ -496,6 +587,19 @@ def zone_at(
     """Resolve the billing zone active at an aware timestamp."""
 
     local = _billing_time(ts, fixed_winter_time)
+    if tariff.operator == "tauron" and tariff.group.lower() == "g13s":
+        season_name = "lato" if 4 <= local.month <= 9 else "zima"
+        day_name = (
+            "dzien_wolny"
+            if _is_off_peak_day(local.date(), "weekend_holiday")
+            else "dzien_roboczy"
+        )
+        season = next(item for item in tariff.seasons if _in_season(local.date(), item))
+        for base_zone, windows in season.hours.items():
+            if _covers(windows, local.hour):
+                return f"{season_name}_{day_name}_{base_zone}"
+        raise RuntimeError(f"Brak strefy G13s dla {local.isoformat()}")
+
     if tariff.off_peak_zone and _is_off_peak_day(local.date(), tariff.off_peak_days):
         return tariff.off_peak_zone
 
