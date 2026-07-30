@@ -13,9 +13,13 @@ Ostatni poprawny wynik jest zapisywany lokalnie; przy awarii URE używany jest
 cache, a przy pierwszym uruchomieniu — zweryfikowane stawki wbudowane.
 
 > [!IMPORTANT]
-> Wbudowane stawki obowiązują od **1 stycznia do 31 grudnia 2026 r.** Po tej
-> dacie sensor celowo przejdzie w stan niedostępny, aby nie naliczać kosztów na
-> podstawie wygasłego cennika.
+> Wbudowane stawki dystrybucyjne i opłaty systemowe obowiązują od **1 stycznia
+> do 31 grudnia 2026 r.** Automatyczne sprawdzanie arkusza URE aktualizuje cenę
+> sprzedaży energii, ale nie zastępuje rocznych taryf dystrybucyjnych. Integracja
+> nie zawiera jeszcze stawek na 2027 r.; po 31 grudnia 2026 r. sensor celowo
+> przejdzie w stan niedostępny, aby nie naliczać kosztów według wygasłego
+> cennika. Okres taryf na 2026 r. potwierdza
+> [komunikat URE z 17.12.2025 r.](https://www.ure.gov.pl/pl/urzad/informacje-ogolne/aktualnosci/13002,Prezes-Urzedu-Regulacji-Energetyki-zatwierdzil-taryfy-na-sprzedaz-i-dystrybucje.html).
 
 ## Obsługiwane taryfy
 
@@ -76,16 +80,66 @@ oficjalna integracja Nord Pool.
 
 Niektóre importery danych — w szczególności godzinowy importer TAURON AMIplus —
 udostępniają zużycie bez encji sensora, jako identyfikatory statystyk zewnętrznych.
-Home Assistant nie pozwala przypisać do nich encji z bieżącą ceną. W takim
-przypadku włącz w opcjach integracji **Utwórz koszty dla zewnętrznych statystyk
-zużycia** i przypisz statystykę `kWh` do każdej strefy taryfy.
+Home Assistant nie pozwala przypisać do nich encji z bieżącą ceną. Wymaga osobnej,
+narastającej statystyki kosztu w walucie ustawionej w Home Assistant.
 
-Integracja utworzy dla każdej strefy narastającą statystykę kosztu w `PLN`.
-W panelu Energia pozostaw statystykę zużycia w polu energii, a odpowiadającą jej
-statystykę `polish_energy_price:…_cost_…` wybierz jako **statystykę kosztu**.
-Most aktualizuje dane co godzinę, ponownie sprawdza ostatnie 7 dni (obsługa
-opóźnionych importów), a po zmianie ceny lub mapowania przelicza dane od początku
-okresu obowiązywania taryfy.
+#### Wymagania dla statystyki źródłowej
+
+Każda wskazana statystyka zużycia musi:
+
+- przechowywać energię, a nie moc chwilową;
+- mieć jednostkę zgodną z energią, np. `kWh`;
+- zawierać narastającą sumę (`has_sum: true`);
+- odpowiadać dokładnie jednej strefie taryfowej; tej samej statystyki nie można
+  przypisać do dwóch stref.
+
+Identyfikatory i metadane można sprawdzić w **Narzędzia deweloperskie →
+Statystyki**. Wybieraj statystyki poboru (`consumption`), a nie oddawania energii
+do sieci (`generation`).
+
+#### Tworzenie statystyk kosztu
+
+1. Otwórz **Ustawienia → Urządzenia i usługi → Polish Energy Prices →
+   Konfiguruj**.
+2. Włącz **Utwórz koszty dla zewnętrznych statystyk zużycia** i przejdź dalej.
+3. Dla każdej strefy wybierz odpowiadającą jej narastającą statystykę zużycia.
+   W taryfie jednostrefowej będzie to jedno pole, a w taryfach dwu- i
+   trójstrefowych odpowiednio dwa lub trzy pola.
+4. Zapisz ustawienia. Pierwsze przeliczenie historii może potrwać kilka minut,
+   zależnie od liczby rekordów w bazie rejestratora.
+5. W **Narzędzia deweloperskie → Statystyki** poczekaj na nowe identyfikatory:
+
+   ```text
+   polish_energy_price:<id_wpisu>_cost_<strefa>
+   ```
+
+   Każda z nich ma jednostkę waluty, np. `PLN`, oraz narastającą sumę kosztu.
+
+Przykład mapowania dla TAURON G13:
+
+| Rejestr/importer | Strefa w Polish Energy Prices | Wynikowa statystyka kosztu |
+|---|---|---|
+| T1 — szczyt przedpołudniowy | `szczyt_przedpoludniowy` | `…_cost_szczyt_przedpoludniowy` |
+| T2 — szczyt popołudniowy | `szczyt_popoludniowy` | `…_cost_szczyt_popoludniowy` |
+| T3 — pozostałe godziny | `pozostale` | `…_cost_pozostale` |
+
+#### Przypisanie kosztu w panelu Energia
+
+Dla każdej strefy dodanej jako osobne źródło energii z sieci:
+
+1. pozostaw zewnętrzną statystykę `consumption` jako statystykę zużycia;
+2. w sposobie śledzenia kosztu wybierz **statystykę kosztu**;
+3. wskaż odpowiadającą strefie statystykę
+   `polish_energy_price:…_cost_…`;
+4. nie wybieraj sensora `Cena energii brutto` jako statystyki kosztu — ma on
+   jednostkę `PLN/kWh`, a koszt musi być narastającą wartością w `PLN`;
+5. zapisz konfigurację i sprawdź, czy panel Energia nie zgłasza błędów dla tego
+   źródła.
+
+Most aktualizuje koszt co godzinę i ponownie analizuje ostatnie 7 dni, dzięki
+czemu uwzględnia opóźnione importy. Po zmianie ceny lub mapowania przelicza dane
+od początku okresu obowiązywania taryfy. Koszt obejmuje te same zmienne składniki
+brutto co sensor ceny; nie zawiera miesięcznych opłat stałych.
 
 Ta opcja jest odseparowana od zwykłej encji ceny. Liczniki udostępniające encję
 `kWh` z `state_class: total` albo `total_increasing` — np. WM-Bus, ESPHome czy
