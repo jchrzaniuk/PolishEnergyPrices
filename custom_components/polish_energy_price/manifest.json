@@ -1,6 +1,6 @@
 {
   "domain": "polish_energy_price",
-  "name": "Polish Energy Price",
+  "name": "Polish Energy Prices",
   "codeowners": ["@jchrzaniuk"],
   "config_flow": true,
   "documentation": "https://github.com/jchrzaniuk/PolishEnergyPrices",
@@ -8,5 +8,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/jchrzaniuk/PolishEnergyPrices/issues",
   "requirements": [],
-  "version": "1.1.0"
+  "version": "1.1.1"
 }

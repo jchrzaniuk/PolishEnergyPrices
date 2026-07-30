@@ -1,4 +1,4 @@
-"""Polish Energy Price integration."""
+"""Polish Energy Prices integration."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .coordinator import EnergyPriceCoordinator
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Polish Energy Price from a config entry."""
+    """Set up Polish Energy Prices from a config entry."""
 
     coordinator = EnergyPriceCoordinator(hass, entry)
     await coordinator.async_initialize()

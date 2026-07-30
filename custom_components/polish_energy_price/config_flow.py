@@ -1,4 +1,4 @@
-"""Config flow for Polish Energy Price."""
+"""Config flow for Polish Energy Prices."""
 
 from __future__ import annotations
 

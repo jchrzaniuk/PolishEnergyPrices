@@ -1,4 +1,4 @@
-"""Price sensor for Polish Energy Price."""
+"""Price sensor for Polish Energy Prices."""
 
 from __future__ import annotations
 

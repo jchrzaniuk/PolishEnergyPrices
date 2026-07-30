@@ -1,4 +1,4 @@
-"""Constants for the Polish Energy Price integration."""
+"""Constants for the Polish Energy Prices integration."""
 
 from __future__ import annotations
 

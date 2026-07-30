@@ -1,4 +1,4 @@
-# Polish Energy Price dla Home Assistant
+# Polish Energy Prices dla Home Assistant
 
 Natywna integracja Home Assistant obliczająca **bieżącą cenę brutto 1 kWh** dla
 gospodarstw domowych przyłączonych do jednego z pięciu największych OSD:
@@ -37,7 +37,7 @@ których w materiałach nie ma kompletnej, regulowanej ceny energii.
 1. W HACS otwórz **Integracje** → menu → **Niestandardowe repozytoria**.
 2. Dodaj `https://github.com/jchrzaniuk/PolishEnergyPrices` i wybierz kategorię
    **Integracja**.
-3. Zainstaluj „Polish Energy Price” i uruchom Home Assistant ponownie.
+3. Zainstaluj „Polish Energy Prices” i uruchom Home Assistant ponownie.
 
 ### Ręcznie
 
@@ -48,7 +48,7 @@ uruchom Home Assistant ponownie.
 ## Konfiguracja
 
 1. Otwórz **Ustawienia → Urządzenia i usługi → Dodaj integrację**.
-2. Wyszukaj „Polish Energy Price”.
+2. Wyszukaj „Polish Energy Prices”.
 3. Wybierz OSD i grupę taryfową z faktury.
 4. Dla nowego licznika zdalnego wybierz `czas lokalny (licznik AMI)`.
 5. Wybierz źródło ceny energii:
