@@ -36,7 +36,7 @@ class OfficialTariffTests(unittest.TestCase):
 
     def test_discovers_stoen_custom_element(self) -> None:
         page = """
-        <eon-ui-link text="Taryfa dla dystrybucji" 
+        <eon-ui-link text="Taryfa dla dystrybucji"
           href="/files/2027/stoen-taryfa-dystrybucji-2027.pdf"></eon-ui-link>
         """
         result = official.discover_distribution_document(
