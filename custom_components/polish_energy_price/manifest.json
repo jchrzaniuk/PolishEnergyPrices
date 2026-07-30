@@ -1,0 +1,12 @@
+{
+  "domain": "polish_energy_price",
+  "name": "Polish Energy Price",
+  "codeowners": ["@jchrzaniuk"],
+  "config_flow": true,
+  "documentation": "https://github.com/jchrzaniuk/PolishEnergyPrices",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/jchrzaniuk/PolishEnergyPrices/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

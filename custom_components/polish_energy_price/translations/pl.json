@@ -1,0 +1,88 @@
+{
+  "title": "Polska cena energii",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Wybierz operatora sieci dystrybucyjnej",
+        "description": "Wybierz OSD widocznego na fakturze za dystrybucję.",
+        "data": {
+          "operator": "Operator (OSD)"
+        }
+      },
+      "tariff": {
+        "title": "Wybierz grupę taryfową",
+        "description": "Grupa taryfowa znajduje się na umowie lub fakturze. Czas lokalny jest właściwy dla współczesnych liczników AMI.",
+        "data": {
+          "tariff": "Grupa taryfowa",
+          "meter_clock": "Sposób pracy zegara licznika",
+          "day_hours": "Godziny strefy dziennej ENEA (np. 6-13,15-22)"
+        },
+        "data_description": {
+          "day_hours": "Istotne tylko dla ENEA G12; sprawdź godziny na umowie lub liczniku."
+        }
+      },
+      "energy": {
+        "title": "Wybierz źródło ceny energii",
+        "description": "Cennik regulowany dotyczy sprzedawcy z urzędu. Jeśli zmieniono sprzedawcę lub wybrano ofertę komercyjną, podaj ceny brutto z umowy.",
+        "data": {
+          "price_source": "Źródło ceny energii"
+        }
+      },
+      "custom_prices": {
+        "title": "Podaj ceny energii brutto",
+        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh. Integracja osobno doliczy dystrybucję.",
+        "data": {
+          "calodobowa": "Strefa całodobowa",
+          "dzienna": "Strefa dzienna",
+          "nocna": "Strefa nocna",
+          "szczytowa": "Strefa szczytowa",
+          "pozaszczytowa": "Strefa pozaszczytowa",
+          "szczyt_przedpoludniowy": "Szczyt przedpołudniowy",
+          "szczyt_popoludniowy": "Szczyt popołudniowy",
+          "pozostale": "Pozostałe godziny"
+        }
+      }
+    },
+    "error": {
+      "invalid_hours": "Nieprawidłowe godziny. Użyj formatu 6-13,15-22; przedziały nie mogą się nakładać."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ustawienia ceny energii",
+        "description": "Zmień źródło ceny, godziny ENEA G12 lub sposób pracy zegara licznika.",
+        "data": {
+          "price_source": "Źródło ceny energii",
+          "meter_clock": "Sposób pracy zegara licznika",
+          "day_hours": "Godziny strefy dziennej ENEA (np. 6-13,15-22)"
+        }
+      },
+      "custom_prices": {
+        "title": "Podaj ceny energii brutto",
+        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh.",
+        "data": {
+          "calodobowa": "Strefa całodobowa",
+          "dzienna": "Strefa dzienna",
+          "nocna": "Strefa nocna",
+          "szczytowa": "Strefa szczytowa",
+          "pozaszczytowa": "Strefa pozaszczytowa",
+          "szczyt_przedpoludniowy": "Szczyt przedpołudniowy",
+          "szczyt_popoludniowy": "Szczyt popołudniowy",
+          "pozostale": "Pozostałe godziny"
+        }
+      }
+    },
+    "error": {
+      "invalid_hours": "Nieprawidłowe godziny. Użyj formatu 6-13,15-22; przedziały nie mogą się nakładać."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "gross_price": {
+        "name": "Cena energii brutto"
+      }
+    }
+  }
+}
+

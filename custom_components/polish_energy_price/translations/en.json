@@ -1,0 +1,88 @@
+{
+  "title": "Polish Energy Price",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select the distribution system operator",
+        "description": "Select the DSO shown on your distribution bill.",
+        "data": {
+          "operator": "Distribution system operator (DSO)"
+        }
+      },
+      "tariff": {
+        "title": "Select a tariff group",
+        "description": "Your tariff group is shown on the contract or bill. Local time is correct for modern AMI meters.",
+        "data": {
+          "tariff": "Tariff group",
+          "meter_clock": "Meter clock behavior",
+          "day_hours": "ENEA daytime hours (for example 6-13,15-22)"
+        },
+        "data_description": {
+          "day_hours": "Only relevant to ENEA G12; verify the hours on your contract or meter."
+        }
+      },
+      "energy": {
+        "title": "Select the energy price source",
+        "description": "The regulated price applies to the default seller. If you switched seller or offer, enter the gross prices from your contract.",
+        "data": {
+          "price_source": "Energy price source"
+        }
+      },
+      "custom_prices": {
+        "title": "Enter gross energy prices",
+        "description": "Enter active-energy prices including VAT and excise duty in PLN/kWh. Distribution is added separately.",
+        "data": {
+          "calodobowa": "All-day zone",
+          "dzienna": "Day zone",
+          "nocna": "Night zone",
+          "szczytowa": "Peak zone",
+          "pozaszczytowa": "Off-peak zone",
+          "szczyt_przedpoludniowy": "Morning peak",
+          "szczyt_popoludniowy": "Afternoon peak",
+          "pozostale": "Other hours"
+        }
+      }
+    },
+    "error": {
+      "invalid_hours": "Invalid hours. Use 6-13,15-22; intervals must not overlap."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Energy price settings",
+        "description": "Change the price source, ENEA G12 hours, or meter clock behavior.",
+        "data": {
+          "price_source": "Energy price source",
+          "meter_clock": "Meter clock behavior",
+          "day_hours": "ENEA daytime hours (for example 6-13,15-22)"
+        }
+      },
+      "custom_prices": {
+        "title": "Enter gross energy prices",
+        "description": "Enter active-energy prices including VAT and excise duty in PLN/kWh.",
+        "data": {
+          "calodobowa": "All-day zone",
+          "dzienna": "Day zone",
+          "nocna": "Night zone",
+          "szczytowa": "Peak zone",
+          "pozaszczytowa": "Off-peak zone",
+          "szczyt_przedpoludniowy": "Morning peak",
+          "szczyt_popoludniowy": "Afternoon peak",
+          "pozostale": "Other hours"
+        }
+      }
+    },
+    "error": {
+      "invalid_hours": "Invalid hours. Use 6-13,15-22; intervals must not overlap."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "gross_price": {
+        "name": "Gross energy price"
+      }
+    }
+  }
+}
+
