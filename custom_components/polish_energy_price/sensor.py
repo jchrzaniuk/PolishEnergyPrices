@@ -54,7 +54,10 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
     """Current all-in gross price of one kWh."""
 
     _attr_has_entity_name = True
-    _attr_translation_key = "gross_price"
+    # Keep the UI consistently Polish regardless of the browser language.
+    # The unique ID stays unchanged, so existing Energy dashboard mappings do
+    # not need to be recreated.
+    _attr_name = "Cena energii brutto"
     _attr_icon = "mdi:cash-clock"
     _attr_native_unit_of_measurement = "PLN/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -117,49 +120,93 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
         result = self._breakdown()
         settings = self._settings()
         custom = settings.get(CONF_PRICE_SOURCE) == PRICE_SOURCE_CUSTOM
+        system_rates = self.coordinator.data.system_net or {}
+        network_net = float(
+            (self.coordinator.data.distribution_net or self._tariff.distribution_net)[
+                result.zone_key
+            ]
+        )
+        quality_net = float(system_rates.get("quality", 0))
+        oze_net = float(system_rates.get("oze", 0))
+        cogeneration_net = float(system_rates.get("cogeneration", 0))
+        system_net = quality_net + oze_net + cogeneration_net
+        distribution_net = network_net + system_net
+        energy_net_with_excise = result.energy / VAT
+        energy_net_without_excise = max(
+            0.0, energy_net_with_excise - EXCISE_NET_PLN_KWH
+        )
+        energy_vat = result.energy - energy_net_with_excise
+        distribution_vat = result.distribution - distribution_net
+        total_net = energy_net_with_excise + distribution_net
+        total_vat = result.total - total_net
+
+        source_names = {
+            "ure": "aktualny arkusz URE",
+            "ure_cache": "ostatni poprawny arkusz URE z pamięci podręcznej",
+            "bundled": "zweryfikowane stawki wbudowane",
+        }
         attributes: dict[str, Any] = {
-            "operator": OPERATOR_NAMES[self._operator],
-            "tariff": self._group,
-            "zone": result.zone_name,
-            "zone_key": result.zone_key,
-            "energy_price_gross": result.energy,
-            "energy_price_includes_vat": True,
-            "energy_price_includes_excise": True,
-            "excise_duty_net": EXCISE_NET_PLN_KWH,
-            "excise_duty_gross_component": result.excise,
-            "energy_net_before_excise": round(
-                max(0.0, result.energy / VAT - EXCISE_NET_PLN_KWH), 4
+            "Cena łączna brutto [PLN/kWh]": round(result.total, 4),
+            "Cena łączna netto [PLN/kWh]": round(total_net, 4),
+            "VAT łącznie [PLN/kWh]": round(total_vat, 4),
+            "Energia czynna brutto [PLN/kWh]": round(result.energy, 4),
+            "Energia czynna netto z akcyzą [PLN/kWh]": round(energy_net_with_excise, 4),
+            "Energia czynna netto bez akcyzy [PLN/kWh]": round(
+                energy_net_without_excise, 4
             ),
-            "network_price_gross": result.network,
-            "system_charges_gross": result.system,
-            "distribution_price_gross": result.distribution,
-            "price_source": "contract" if custom else self.coordinator.data.source,
-            "energy_seller": "custom" if custom else SELLER_NAMES[self._operator],
-            "fixed_monthly_fees_included": False,
-            "valid_from": self.coordinator.data.valid_from,
-            "valid_until": self.coordinator.data.valid_until,
-            "distribution_source_url": self.coordinator.data.distribution_source_url,
-            "system_source_url": self.coordinator.data.system_source_url,
-            "oze_source_url": self.coordinator.data.oze_source_url,
-            "cogeneration_source_url": (self.coordinator.data.cogeneration_source_url),
-            "official_tariffs_last_checked": self.coordinator.data.official_last_checked,
-            "official_tariffs_last_updated": self.coordinator.data.official_last_updated,
-            "official_tariffs_last_error": self.coordinator.data.official_error,
-            "quality_charge_net": (self.coordinator.data.system_net or {}).get(
-                "quality"
+            "Akcyza netto [PLN/kWh]": EXCISE_NET_PLN_KWH,
+            "VAT od energii i akcyzy [PLN/kWh]": round(energy_vat, 4),
+            "Dystrybucja brutto [PLN/kWh]": round(result.distribution, 4),
+            "Dystrybucja netto [PLN/kWh]": round(distribution_net, 4),
+            "Sieć zmienna netto [PLN/kWh]": round(network_net, 4),
+            "Opłata jakościowa netto [PLN/kWh]": round(quality_net, 4),
+            "Opłata OZE netto [PLN/kWh]": round(oze_net, 4),
+            "Opłata kogeneracyjna netto [PLN/kWh]": round(cogeneration_net, 4),
+            "VAT od dystrybucji [PLN/kWh]": round(distribution_vat, 4),
+            "Operator sieci": OPERATOR_NAMES[self._operator],
+            "Grupa taryfowa": self._group,
+            "Aktywna strefa": result.zone_name,
+            "Klucz strefy": result.zone_key,
+            "Źródło ceny energii": (
+                "własna umowa użytkownika"
+                if custom
+                else source_names.get(
+                    self.coordinator.data.source, self.coordinator.data.source
+                )
             ),
-            "oze_charge_net": (self.coordinator.data.system_net or {}).get("oze"),
-            "cogeneration_charge_net": (self.coordinator.data.system_net or {}).get(
-                "cogeneration"
+            "Sprzedawca energii": (
+                "własna umowa użytkownika" if custom else SELLER_NAMES[self._operator]
+            ),
+            "Opłaty stałe uwzględnione": "Nie",
+            "Obowiązuje od": self.coordinator.data.valid_from,
+            "Obowiązuje do": self.coordinator.data.valid_until,
+            "Źródło taryfy dystrybucyjnej": (
+                self.coordinator.data.distribution_source_url
+            ),
+            "Źródło opłaty jakościowej": self.coordinator.data.system_source_url,
+            "Źródło opłaty OZE": self.coordinator.data.oze_source_url,
+            "Źródło opłaty kogeneracyjnej": (
+                self.coordinator.data.cogeneration_source_url
+            ),
+            "Ostatnia kontrola taryf urzędowych": (
+                self.coordinator.data.official_last_checked
+            ),
+            "Ostatnia aktualizacja taryf urzędowych": (
+                self.coordinator.data.official_last_updated
+            ),
+            "Ostatni błąd taryf urzędowych": (
+                self.coordinator.data.official_error or "Brak"
             ),
         }
         if not custom:
             attributes.update(
                 {
-                    "ure_source_url": self.coordinator.data.source_url,
-                    "ure_last_checked": self.coordinator.data.last_checked,
-                    "ure_last_updated": self.coordinator.data.last_updated,
-                    "ure_last_error": self.coordinator.data.error,
+                    "Źródło ceny energii URE": self.coordinator.data.source_url,
+                    "Ostatnia kontrola ceny URE": self.coordinator.data.last_checked,
+                    "Ostatnia aktualizacja ceny URE": (
+                        self.coordinator.data.last_updated
+                    ),
+                    "Ostatni błąd ceny URE": self.coordinator.data.error or "Brak",
                 }
             )
         return attributes

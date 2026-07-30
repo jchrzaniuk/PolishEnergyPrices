@@ -75,6 +75,12 @@ urządzenia `monetary`, ponieważ Home Assistant wymaga dla niej samego kodu
 waluty (`PLN`), a nie ceny za kWh. Jest to ten sam wzorzec, którego używa
 oficjalna integracja Nord Pool.
 
+Po kliknięciu encji **Cena energii brutto** okno szczegółów pokazuje po polsku
+pełne wyliczenie jednostkowe: cenę energii netto i brutto, akcyzę, VAT, składnik
+sieciowy, opłatę jakościową, OZE, kogeneracyjną, sumę dystrybucji oraz końcową
+cenę netto i brutto. Wszystkie kwoty mają jednostkę `PLN/kWh`. Niżej widoczne są
+aktywna strefa, okres obowiązywania i adresy dokumentów źródłowych.
+
 ### Liczniki udostępniające tylko statystyki zewnętrzne
 
 Niektóre importery danych — w szczególności godzinowy importer TAURON AMIplus —
