@@ -14,6 +14,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -21,12 +22,14 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    StatisticSelector,
     TextSelector,
 )
 
 from .const import (
     CONF_CUSTOM_PRICES,
     CONF_DAY_HOURS,
+    CONF_EXTERNAL_STATISTICS,
     CONF_METER_CLOCK,
     CONF_OPERATOR,
     CONF_PRICE_SOURCE,
@@ -36,6 +39,7 @@ from .const import (
     METER_CLOCK_LOCAL,
     PRICE_SOURCE_CUSTOM,
     PRICE_SOURCE_REGULATED,
+    external_statistic_key,
 )
 from .tariff import OPERATOR_NAMES, get_tariff, groups_for, parse_day_hours
 
@@ -114,10 +118,16 @@ def _tariff_schema(operator: str, defaults: dict[str, Any] | None = None) -> vol
     return vol.Schema(schema)
 
 
-def _source_schema(default: str = PRICE_SOURCE_REGULATED) -> vol.Schema:
+def _source_schema(
+    default: str = PRICE_SOURCE_REGULATED,
+    external_statistics: bool = False,
+) -> vol.Schema:
     return vol.Schema(
         {
-            vol.Required(CONF_PRICE_SOURCE, default=default): _price_source_selector()
+            vol.Required(CONF_PRICE_SOURCE, default=default): _price_source_selector(),
+            vol.Required(
+                CONF_EXTERNAL_STATISTICS, default=external_statistics
+            ): BooleanSelector(),
         }
     )
 
@@ -145,6 +155,26 @@ def _prices_schema(
             for zone in tariff.zones
         }
     )
+
+
+def _external_statistics_schema(
+    operator: str,
+    group: str,
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Select one cumulative energy statistic for every tariff zone."""
+
+    defaults = defaults or {}
+    schema: dict[Any, Any] = {}
+    for zone in get_tariff(operator, group).zones:
+        key = external_statistic_key(zone)
+        marker = (
+            vol.Required(key, default=defaults[key])
+            if defaults.get(key)
+            else vol.Required(key)
+        )
+        schema[marker] = StatisticSelector()
+    return vol.Schema(schema)
 
 
 class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -195,7 +225,7 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data.update(user_input)
             if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
                 return await self.async_step_custom_prices()
-            return self._finish()
+            return await self._next_after_prices()
         return self.async_show_form(step_id="energy", data_schema=_source_schema())
 
     async def async_step_custom_prices(
@@ -205,10 +235,35 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._data[CONF_CUSTOM_PRICES] = user_input
-            return self._finish()
+            return await self._next_after_prices()
         return self.async_show_form(
             step_id="custom_prices",
             data_schema=_prices_schema(self._data[CONF_OPERATOR], self._data[CONF_TARIFF]),
+        )
+
+    async def _next_after_prices(self) -> ConfigFlowResult:
+        if self._data.get(CONF_EXTERNAL_STATISTICS, False):
+            return await self.async_step_external_statistics()
+        return self._finish()
+
+    async def async_step_external_statistics(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Map external cumulative energy statistics to tariff zones."""
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if len(set(user_input.values())) != len(user_input):
+                errors["base"] = "duplicate_statistics"
+            else:
+                self._data.update(user_input)
+                return self._finish()
+        return self.async_show_form(
+            step_id="external_statistics",
+            data_schema=_external_statistics_schema(
+                self._data[CONF_OPERATOR], self._data[CONF_TARIFF], user_input
+            ),
+            errors=errors,
         )
 
     def _finish(self) -> ConfigFlowResult:
@@ -252,7 +307,7 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 self._options = user_input
                 if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
                     return await self.async_step_custom_prices()
-                return self.async_create_entry(data=self._options)
+                return await self._next_after_prices()
 
         schema: dict[Any, Any] = {
             vol.Required(
@@ -263,6 +318,10 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 CONF_METER_CLOCK,
                 default=current.get(CONF_METER_CLOCK, METER_CLOCK_LOCAL),
             ): _meter_clock_selector(),
+            vol.Required(
+                CONF_EXTERNAL_STATISTICS,
+                default=current.get(CONF_EXTERNAL_STATISTICS, False),
+            ): BooleanSelector(),
         }
         if operator == "enea" and group == "G12":
             schema[vol.Optional(
@@ -280,7 +339,7 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
 
         if user_input is not None:
             self._options[CONF_CUSTOM_PRICES] = user_input
-            return self.async_create_entry(data=self._options)
+            return await self._next_after_prices()
         return self.async_show_form(
             step_id="custom_prices",
             data_schema=_prices_schema(
@@ -288,4 +347,32 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 self.config_entry.data[CONF_TARIFF],
                 self.config_entry.options.get(CONF_CUSTOM_PRICES),
             ),
+        )
+
+    async def _next_after_prices(self) -> ConfigFlowResult:
+        if self._options.get(CONF_EXTERNAL_STATISTICS, False):
+            return await self.async_step_external_statistics()
+        return self.async_create_entry(data=self._options)
+
+    async def async_step_external_statistics(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit mappings from cumulative energy statistics to tariff zones."""
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if len(set(user_input.values())) != len(user_input):
+                errors["base"] = "duplicate_statistics"
+            else:
+                self._options.update(user_input)
+                return self.async_create_entry(data=self._options)
+        current = {**self.config_entry.data, **self.config_entry.options, **self._options}
+        return self.async_show_form(
+            step_id="external_statistics",
+            data_schema=_external_statistics_schema(
+                self.config_entry.data[CONF_OPERATOR],
+                self.config_entry.data[CONF_TARIFF],
+                current if user_input is None else user_input,
+            ),
+            errors=errors,
         )

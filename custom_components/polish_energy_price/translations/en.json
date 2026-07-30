@@ -25,7 +25,11 @@
         "title": "Select the energy price source",
         "description": "Default-seller prices are checked against the official URE workbook every 12 hours. If you switched seller or offer, enter the gross prices from your contract.",
         "data": {
-          "price_source": "Energy price source"
+          "price_source": "Energy price source",
+          "external_statistics": "Create costs for external consumption statistics"
+        },
+        "data_description": {
+          "external_statistics": "Enable only when the meter exposes statistics without entities (for example imported TAURON AMIplus hourly data). Regular entity-based meters do not need this."
         }
       },
       "custom_prices": {
@@ -41,10 +45,25 @@
           "szczyt_popoludniowy": "Afternoon peak",
           "pozostale": "Other hours"
         }
+      },
+      "external_statistics": {
+        "title": "Map consumption statistics to zones",
+        "description": "Select a cumulative energy statistic (kWh) for each zone. The integration creates the corresponding gross cost statistic in PLN for use as the cost statistic in the Energy dashboard.",
+        "data": {
+          "external_statistic_calodobowa": "Consumption — all-day zone",
+          "external_statistic_dzienna": "Consumption — day zone",
+          "external_statistic_nocna": "Consumption — night zone",
+          "external_statistic_szczytowa": "Consumption — peak zone",
+          "external_statistic_pozaszczytowa": "Consumption — off-peak zone",
+          "external_statistic_szczyt_przedpoludniowy": "Consumption — morning peak",
+          "external_statistic_szczyt_popoludniowy": "Consumption — afternoon peak",
+          "external_statistic_pozostale": "Consumption — other hours"
+        }
       }
     },
     "error": {
-      "invalid_hours": "Invalid hours. Use 6-13,15-22; intervals must not overlap."
+      "invalid_hours": "Invalid hours. Use 6-13,15-22; intervals must not overlap.",
+      "duplicate_statistics": "Each tariff zone must use a different consumption statistic."
     }
   },
   "options": {
@@ -55,7 +74,8 @@
         "data": {
           "price_source": "Energy price source",
           "meter_clock": "Meter clock behavior",
-          "day_hours": "ENEA daytime hours (for example 6-13,15-22)"
+          "day_hours": "ENEA daytime hours (for example 6-13,15-22)",
+          "external_statistics": "Create costs for external consumption statistics"
         }
       },
       "custom_prices": {
@@ -71,10 +91,25 @@
           "szczyt_popoludniowy": "Afternoon peak",
           "pozostale": "Other hours"
         }
+      },
+      "external_statistics": {
+        "title": "Map consumption statistics to zones",
+        "description": "Select a cumulative energy statistic (kWh) for each zone. The integration creates separate gross cost statistics in PLN.",
+        "data": {
+          "external_statistic_calodobowa": "Consumption — all-day zone",
+          "external_statistic_dzienna": "Consumption — day zone",
+          "external_statistic_nocna": "Consumption — night zone",
+          "external_statistic_szczytowa": "Consumption — peak zone",
+          "external_statistic_pozaszczytowa": "Consumption — off-peak zone",
+          "external_statistic_szczyt_przedpoludniowy": "Consumption — morning peak",
+          "external_statistic_szczyt_popoludniowy": "Consumption — afternoon peak",
+          "external_statistic_pozostale": "Consumption — other hours"
+        }
       }
     },
     "error": {
-      "invalid_hours": "Invalid hours. Use 6-13,15-22; intervals must not overlap."
+      "invalid_hours": "Invalid hours. Use 6-13,15-22; intervals must not overlap.",
+      "duplicate_statistics": "Each tariff zone must use a different consumption statistic."
     }
   },
   "entity": {

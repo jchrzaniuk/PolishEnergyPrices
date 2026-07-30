@@ -50,6 +50,20 @@ class TariffTests(unittest.TestCase):
         self.assertEqual("pozostale", weekend.zone_key)
         self.assertEqual((0.6257, 0.9048, 1.4961), (off.total, morning.total, afternoon.total))
 
+    def test_explicit_zone_prices_match_tauron_g13_meter_registers(self) -> None:
+        definition = tariff.get_tariff("tauron", "G13")
+        self.assertEqual(
+            {
+                "szczyt_przedpoludniowy": 0.9048,
+                "szczyt_popoludniowy": 1.4961,
+                "pozostale": 0.6257,
+            },
+            {
+                zone: tariff.price_for_zone(definition, zone).total
+                for zone in definition.zones
+            },
+        )
+
     def test_pge_g12_changes_hours_between_seasons(self) -> None:
         definition = tariff.get_tariff("pge", "G12")
         self.assertEqual(

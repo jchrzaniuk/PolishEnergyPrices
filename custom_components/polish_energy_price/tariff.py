@@ -432,6 +432,19 @@ def price_at(
         day_hours=day_hours,
         fixed_winter_time=fixed_winter_time,
     )
+    return price_for_zone(tariff, zone, custom_energy=custom_energy)
+
+
+def price_for_zone(
+    tariff: TariffDefinition,
+    zone: str,
+    *,
+    custom_energy: Mapping[str, float] | None = None,
+) -> PriceBreakdown:
+    """Calculate the gross marginal price for one explicit tariff zone."""
+
+    if zone not in tariff.zones:
+        raise ValueError(f"Nieznana strefa {zone!r} taryfy {tariff.operator}:{tariff.group}")
     prices = custom_energy if custom_energy else tariff.energy_gross
     energy = round(float(prices[zone]), 4)
     network = round(float(tariff.distribution_net[zone]) * VAT, 4)

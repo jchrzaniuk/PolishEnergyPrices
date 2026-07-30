@@ -46,7 +46,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the current gross electricity price sensor."""
 
-    sensor = PolishEnergyPriceSensor(entry, entry.runtime_data)
+    sensor = PolishEnergyPriceSensor(entry, entry.runtime_data.coordinator)
     async_add_entities([sensor])
     entry.async_on_unload(
         async_track_time_change(hass, sensor.handle_hour_change, minute=0, second=0)

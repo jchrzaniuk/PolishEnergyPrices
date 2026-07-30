@@ -72,6 +72,26 @@ urządzenia `monetary`, ponieważ Home Assistant wymaga dla niej samego kodu
 waluty (`PLN`), a nie ceny za kWh. Jest to ten sam wzorzec, którego używa
 oficjalna integracja Nord Pool.
 
+### Liczniki udostępniające tylko statystyki zewnętrzne
+
+Niektóre importery danych — w szczególności godzinowy importer TAURON AMIplus —
+udostępniają zużycie bez encji sensora, jako identyfikatory statystyk zewnętrznych.
+Home Assistant nie pozwala przypisać do nich encji z bieżącą ceną. W takim
+przypadku włącz w opcjach integracji **Utwórz koszty dla zewnętrznych statystyk
+zużycia** i przypisz statystykę `kWh` do każdej strefy taryfy.
+
+Integracja utworzy dla każdej strefy narastającą statystykę kosztu w `PLN`.
+W panelu Energia pozostaw statystykę zużycia w polu energii, a odpowiadającą jej
+statystykę `polish_energy_price:…_cost_…` wybierz jako **statystykę kosztu**.
+Most aktualizuje dane co godzinę, ponownie sprawdza ostatnie 7 dni (obsługa
+opóźnionych importów), a po zmianie ceny lub mapowania przelicza dane od początku
+okresu obowiązywania taryfy.
+
+Ta opcja jest odseparowana od zwykłej encji ceny. Liczniki udostępniające encję
+`kWh` z `state_class: total` albo `total_increasing` — np. WM-Bus, ESPHome czy
+własny podlicznik — nadal korzystają bezpośrednio z sensora bieżącej ceny i nie
+wymagają włączania mostu.
+
 ## Co dokładnie zawiera cena
 
 Stan encji to koszt krańcowy:
