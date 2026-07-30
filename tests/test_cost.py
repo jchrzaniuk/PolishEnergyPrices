@@ -22,6 +22,12 @@ SPEC.loader.exec_module(cost)
 
 
 class CostStatisticsTests(unittest.TestCase):
+    def test_generated_statistic_id_is_lowercase(self) -> None:
+        self.assertEqual(
+            "polish_energy_price:01kysan_cost_pozostale",
+            cost.cost_statistic_id("01KYSAN", "pozostale"),
+        )
+
     def test_multiplies_cumulative_kwh_by_gross_zone_price(self) -> None:
         rows = cost.cumulative_cost_rows(
             [

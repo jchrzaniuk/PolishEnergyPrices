@@ -35,19 +35,13 @@ from .const import (
     external_statistic_key,
 )
 from .coordinator import EnergyPriceCoordinator
-from .cost import cumulative_cost_rows
+from .cost import cost_statistic_id, cumulative_cost_rows
 from .tariff import OPERATOR_NAMES, ZONE_LABELS, WARSAW, get_tariff, price_for_zone
 
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 LOOKBACK = timedelta(days=7)
-
-
-def cost_statistic_id(entry_id: str, zone: str) -> str:
-    """Return the deterministic external cost statistic ID for a tariff zone."""
-
-    return f"{DOMAIN}:{entry_id}_cost_{zone}"
 
 
 class ExternalCostStatisticsManager:

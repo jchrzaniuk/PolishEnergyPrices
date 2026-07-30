@@ -22,6 +22,12 @@ class CostStatisticRow(TypedDict):
     sum: float
 
 
+def cost_statistic_id(entry_id: str, zone: str) -> str:
+    """Return an entity-ID-compatible external cost statistic ID."""
+
+    return f"polish_energy_price:{entry_id}_cost_{zone}".lower()
+
+
 def cumulative_cost_rows(
     rows: Iterable[Mapping[str, float | None]], price: float
 ) -> list[CostStatisticRow]:

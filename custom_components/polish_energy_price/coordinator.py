@@ -33,7 +33,7 @@ REQUEST_TIMEOUT = ClientTimeout(total=45)
 MAX_PAGE_BYTES = 2_000_000
 MAX_WORKBOOK_BYTES = 5_000_000
 STORAGE_VERSION = 1
-REQUEST_HEADERS = {"User-Agent": "Home Assistant PolishEnergyPrices/1.2.1"}
+REQUEST_HEADERS = {"User-Agent": "Home Assistant PolishEnergyPrices/1.2.2"}
 
 
 @dataclass(slots=True)
