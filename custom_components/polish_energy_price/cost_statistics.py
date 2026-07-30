@@ -127,7 +127,7 @@ class ExternalCostStatisticsManager:
 
         recorder = get_instance(self.hass)
         metadata = await recorder.async_add_executor_job(
-            list_statistic_ids, self.hass, set(mappings.values()), "sum"
+            list_statistic_ids, self.hass, set(mappings.values())
         )
         by_id = {item["statistic_id"]: item for item in metadata}
         missing = set(mappings.values()) - set(by_id)
