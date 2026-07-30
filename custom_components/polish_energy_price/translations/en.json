@@ -85,7 +85,8 @@
     },
     "error": {
       "invalid_hours": "Nieprawidłowe godziny. Użyj formatu 6-13,15-22; przedziały nie mogą się nakładać.",
-      "duplicate_statistics": "Każda strefa musi wskazywać inną statystykę zużycia."
+      "duplicate_statistics": "Każda strefa musi wskazywać inną statystykę zużycia.",
+      "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia."
     }
   },
   "options": {
@@ -153,7 +154,8 @@
     },
     "error": {
       "invalid_hours": "Nieprawidłowe godziny. Użyj formatu 6-13,15-22; przedziały nie mogą się nakładać.",
-      "duplicate_statistics": "Każda strefa musi wskazywać inną statystykę zużycia."
+      "duplicate_statistics": "Każda strefa musi wskazywać inną statystykę zużycia.",
+      "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia."
     }
   },
   "entity": {

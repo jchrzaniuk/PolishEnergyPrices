@@ -6,13 +6,15 @@ from typing import Any
 
 import voluptuous as vol
 
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.statistics import list_statistic_ids
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlowWithReload,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.selector import (
     BooleanSelector,
     NumberSelector,
@@ -22,9 +24,9 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
-    StatisticSelector,
     TextSelector,
 )
+from homeassistant.util.unit_conversion import EnergyConverter
 
 from .const import (
     CONF_CUSTOM_PRICES,
@@ -223,6 +225,7 @@ def _g13s_prices_schema(
 def _external_statistics_schema(
     operator: str,
     group: str,
+    statistic_options: list[SelectOptionDict],
     defaults: dict[str, Any] | None = None,
 ) -> vol.Schema:
     """Select one cumulative energy statistic for every tariff zone."""
@@ -236,7 +239,7 @@ def _external_statistics_schema(
             if defaults.get(key)
             else vol.Required(key)
         )
-        return vol.Schema({marker: StatisticSelector()})
+        return vol.Schema({marker: _select(statistic_options)})
     for zone in get_tariff(operator, group).zones:
         key = external_statistic_key(zone)
         marker = (
@@ -244,8 +247,32 @@ def _external_statistics_schema(
             if defaults.get(key)
             else vol.Required(key)
         )
-        schema[marker] = StatisticSelector()
+        schema[marker] = _select(statistic_options)
     return vol.Schema(schema)
+
+
+async def _energy_statistic_options(
+    hass: HomeAssistant,
+) -> list[SelectOptionDict]:
+    """Return cumulative energy statistics as ordinary select options."""
+
+    recorder = get_instance(hass)
+    metadata = await recorder.async_add_executor_job(list_statistic_ids, hass)
+    options: list[SelectOptionDict] = []
+    for item in metadata:
+        if item.get("unit_class") != EnergyConverter.UNIT_CLASS or not item.get(
+            "has_sum"
+        ):
+            continue
+        statistic_id = str(item["statistic_id"])
+        name = item.get("name")
+        label = (
+            f"{name} — {statistic_id}"
+            if name and str(name) != statistic_id
+            else statistic_id
+        )
+        options.append(SelectOptionDict(value=statistic_id, label=label))
+    return sorted(options, key=lambda option: option["label"].casefold())
 
 
 class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -373,10 +400,16 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 self._data.update(user_input)
                 return self._finish()
+        statistic_options = await _energy_statistic_options(self.hass)
+        if not statistic_options:
+            errors["base"] = "no_energy_statistics"
         return self.async_show_form(
             step_id="external_statistics",
             data_schema=_external_statistics_schema(
-                self._data[CONF_OPERATOR], self._data[CONF_TARIFF], user_input
+                self._data[CONF_OPERATOR],
+                self._data[CONF_TARIFF],
+                statistic_options,
+                user_input,
             ),
             errors=errors,
         )
@@ -526,11 +559,15 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
             **self.config_entry.options,
             **self._options,
         }
+        statistic_options = await _energy_statistic_options(self.hass)
+        if not statistic_options:
+            errors["base"] = "no_energy_statistics"
         return self.async_show_form(
             step_id="external_statistics",
             data_schema=_external_statistics_schema(
                 self.config_entry.data[CONF_OPERATOR],
                 self.config_entry.data[CONF_TARIFF],
+                statistic_options,
                 current if user_input is None else user_input,
             ),
             errors=errors,
