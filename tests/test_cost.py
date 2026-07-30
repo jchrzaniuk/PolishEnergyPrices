@@ -52,6 +52,45 @@ class CostStatisticsTests(unittest.TestCase):
         self.assertEqual(1, len(rows))
         self.assertEqual(3.0, rows[0]["sum"])
 
+    def test_prices_each_hour_with_the_rate_at_interval_start(self) -> None:
+        rows = cost.hourly_cumulative_cost_rows(
+            [
+                {"start": 1767222000.0, "sum": 10.0},
+                {"start": 1767225600.0, "sum": 11.0},
+                {"start": 1767229200.0, "sum": 13.0},
+            ],
+            lambda at: 0.5 if at.hour == 23 else 1.0,
+        )
+        self.assertEqual([0.0, 0.5, 2.5], [row["sum"] for row in rows])
+        self.assertEqual(
+            [
+                datetime.fromtimestamp(1767222000.0, timezone.utc),
+                datetime.fromtimestamp(1767225600.0, timezone.utc),
+                datetime.fromtimestamp(1767229200.0, timezone.utc),
+            ],
+            [row["start"] for row in rows],
+        )
+
+    def test_rejects_non_hourly_consumption_gap(self) -> None:
+        with self.assertRaisesRegex(ValueError, "lukę"):
+            cost.hourly_cumulative_cost_rows(
+                [
+                    {"start": 0.0, "sum": 10.0},
+                    {"start": 7200.0, "sum": 11.0},
+                ],
+                lambda _at: 1.0,
+            )
+
+    def test_rejects_reset_of_cumulative_consumption(self) -> None:
+        with self.assertRaisesRegex(ValueError, "wyzerowana"):
+            cost.hourly_cumulative_cost_rows(
+                [
+                    {"start": 0.0, "sum": 10.0},
+                    {"start": 3600.0, "sum": 1.0},
+                ],
+                lambda _at: 1.0,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

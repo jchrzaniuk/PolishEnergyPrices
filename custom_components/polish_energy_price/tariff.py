@@ -304,7 +304,6 @@ TARIFFS: dict[tuple[str, str], TariffDefinition] = {
             "lato_dzien_wolny_nocna": 0.6212,
         },
         description="wielostrefowa sezonowa Tanie Godziny",
-        external_statistics_supported=False,
     ),
     ("pge", "G11"): _tariff(
         "pge",

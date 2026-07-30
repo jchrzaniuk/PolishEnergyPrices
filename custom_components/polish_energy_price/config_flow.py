@@ -229,6 +229,14 @@ def _external_statistics_schema(
 
     defaults = defaults or {}
     schema: dict[Any, Any] = {}
+    if operator == "tauron" and group.lower() == "g13s":
+        key = external_statistic_key("g13s")
+        marker = (
+            vol.Required(key, default=defaults[key])
+            if defaults.get(key)
+            else vol.Required(key)
+        )
+        return vol.Schema({marker: StatisticSelector()})
     for zone in get_tariff(operator, group).zones:
         key = external_statistic_key(zone)
         marker = (

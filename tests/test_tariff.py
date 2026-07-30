@@ -108,7 +108,7 @@ class TariffTests(unittest.TestCase):
             "zima_dzien_wolny_dzienna_pozaszczytowa",
             tariff.zone_at(definition, at("2026-12-24T12:00:00+01:00")),
         )
-        self.assertFalse(definition.external_statistics_supported)
+        self.assertTrue(definition.external_statistics_supported)
 
     def test_pge_g12_changes_hours_between_seasons(self) -> None:
         definition = tariff.get_tariff("pge", "G12")

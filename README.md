@@ -136,7 +136,8 @@ Każda wskazana statystyka zużycia musi:
 - mieć jednostkę zgodną z energią, np. `kWh`;
 - zawierać narastającą sumę (`has_sum: true`);
 - odpowiadać dokładnie jednej strefie taryfowej; tej samej statystyki nie można
-  przypisać do dwóch stref.
+  przypisać do dwóch stref. Wyjątkiem jest G13s, dla której wybiera się jedną
+  narastającą statystykę zawierającą osobny rekord dla każdej godziny.
 
 Identyfikatory i metadane można sprawdzić w **Narzędzia deweloperskie →
 Statystyki**. Wybieraj statystyki poboru (`consumption`), a nie oddawania energii
@@ -149,7 +150,8 @@ do sieci (`generation`).
 2. Włącz **Utwórz koszty dla zewnętrznych statystyk zużycia** i przejdź dalej.
 3. Dla każdej strefy wybierz odpowiadającą jej narastającą statystykę zużycia.
    W taryfie jednostrefowej będzie to jedno pole, a w taryfach dwu- i
-   trójstrefowych odpowiednio dwa lub trzy pola.
+   trójstrefowych odpowiednio dwa lub trzy pola. Dla G13s wybierz jedną
+   godzinową statystykę całego poboru.
 4. Zapisz ustawienia. Pierwsze przeliczenie historii może potrwać kilka minut,
    zależnie od liczby rekordów w bazie rejestratora.
 5. W **Narzędzia deweloperskie → Statystyki** poczekaj na nowe identyfikatory:
@@ -167,6 +169,19 @@ Przykład mapowania dla TAURON G13:
 | T1 — szczyt przedpołudniowy | `szczyt_przedpoludniowy` | `…_cost_szczyt_przedpoludniowy` |
 | T2 — szczyt popołudniowy | `szczyt_popoludniowy` | `…_cost_szczyt_popoludniowy` |
 | T3 — pozostałe godziny | `pozostale` | `…_cost_pozostale` |
+
+Dla TAURON G13s integracja tworzy jedną statystykę:
+
+```text
+polish_energy_price:<id_wpisu>_cost_g13s
+```
+
+Most oblicza przyrost kWh pomiędzy kolejnymi rekordami, wybiera cenę obowiązującą
+na początku danej godziny i dodaje wynik do narastającego kosztu. Uwzględnia w
+ten sposób godzinę, lato lub zimę, dzień roboczy lub wolny oraz polskie święta.
+Jeżeli między rekordami brakuje pełnej godziny, w której wystąpiło zużycie, albo
+narastająca suma zostanie wyzerowana, import kosztu jest wstrzymywany, aby nie
+zapisać błędnych wartości.
 
 #### Przypisanie kosztu w panelu Energia
 
@@ -191,11 +206,9 @@ Ta opcja jest odseparowana od zwykłej encji ceny. Liczniki udostępniające enc
 własny podlicznik — nadal korzystają bezpośrednio z sensora bieżącej ceny i nie
 wymagają włączania mostu.
 
-Most statystyk strefowych nie jest oferowany dla G13s. W tej grupie cena zmienia
-się jednocześnie według godziny, pory roku i rodzaju dnia, a importer musiałby
-udostępniać godzinowe zużycie zamiast zwykłych trzech rejestrów strefowych.
-Encjowy licznik `kWh` nadal działa prawidłowo z sensorem bieżącej ceny w panelu
-Energia.
+G13s korzysta z godzinowego trybu mostu zamiast mnożenia całego rejestru przez
+jedną stawkę. Encjowy licznik `kWh` nadal może działać bez mostu, bezpośrednio z
+sensorem bieżącej ceny w panelu Energia.
 
 ## Co dokładnie zawiera cena
 
