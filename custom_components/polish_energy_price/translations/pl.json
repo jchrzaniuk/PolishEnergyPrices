@@ -58,6 +58,15 @@
           "lato_dzien_wolny_nocna": "Lato, dzień wolny — strefa nocna"
         }
       },
+      "g13s_custom_prices": {
+        "title": "Podaj ceny energii brutto G13s",
+        "description": "Zestaw: {period}. Podaj ceny samej energii czynnej wraz z VAT i akcyzą. Integracja osobno doliczy dystrybucję.",
+        "data": {
+          "dzienna_pozaszczytowa": "Strefa dzienna pozaszczytowa",
+          "dzienna_szczytowa": "Strefa dzienna szczytowa",
+          "nocna": "Strefa nocna"
+        }
+      },
       "external_statistics": {
         "title": "Przypisz statystyki zużycia do stref",
         "description": "Wybierz narastającą statystykę energii (kWh) dla każdej strefy. Integracja utworzy odpowiadającą jej statystykę kosztu brutto w PLN, którą należy wybrać w panelu Energia jako statystykę kosztu.",
@@ -114,6 +123,15 @@
           "lato_dzien_wolny_dzienna_pozaszczytowa": "Lato, dzień wolny — strefa dzienna pozaszczytowa",
           "lato_dzien_wolny_dzienna_szczytowa": "Lato, dzień wolny — strefa dzienna szczytowa",
           "lato_dzien_wolny_nocna": "Lato, dzień wolny — strefa nocna"
+        }
+      },
+      "g13s_custom_prices": {
+        "title": "Podaj ceny energii brutto G13s",
+        "description": "Zestaw: {period}. Podaj ceny samej energii czynnej wraz z VAT i akcyzą.",
+        "data": {
+          "dzienna_pozaszczytowa": "Strefa dzienna pozaszczytowa",
+          "dzienna_szczytowa": "Strefa dzienna szczytowa",
+          "nocna": "Strefa nocna"
         }
       },
       "external_statistics": {

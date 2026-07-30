@@ -42,7 +42,21 @@ from .const import (
     PRICE_SOURCE_TAURON_G13S,
     external_statistic_key,
 )
-from .tariff import OPERATOR_NAMES, get_tariff, groups_for, parse_day_hours
+from .tariff import (
+    G13S_BASE_ZONES,
+    G13S_PERIODS,
+    OPERATOR_NAMES,
+    get_tariff,
+    groups_for,
+    parse_day_hours,
+)
+
+G13S_PERIOD_NAMES = {
+    "zima_dzien_roboczy": "zima — dzień roboczy",
+    "zima_dzien_wolny": "zima — dzień wolny",
+    "lato_dzien_roboczy": "lato — dzień roboczy",
+    "lato_dzien_wolny": "lato — dzień wolny",
+}
 
 
 def _select(options: list[SelectOptionDict]) -> SelectSelector:
@@ -185,6 +199,35 @@ def _prices_schema(
     )
 
 
+def _g13s_prices_schema(
+    period: str,
+    defaults: dict[str, float] | None = None,
+) -> vol.Schema:
+    """Collect one three-zone G13s price set on a compact form."""
+
+    tariff = get_tariff("tauron", "G13s")
+    defaults = defaults or dict(tariff.energy_gross)
+    return vol.Schema(
+        {
+            vol.Required(
+                zone,
+                default=defaults.get(
+                    f"{period}_{zone}", tariff.energy_gross[f"{period}_{zone}"]
+                ),
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0,
+                    max=10,
+                    step=0.0001,
+                    mode=NumberSelectorMode.BOX,
+                    unit_of_measurement="PLN/kWh",
+                )
+            )
+            for zone in G13S_BASE_ZONES
+        }
+    )
+
+
 def _external_statistics_schema(
     operator: str,
     group: str,
@@ -212,6 +255,8 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
+        self._g13s_period_index = 0
+        self._g13s_prices: dict[str, float] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -259,6 +304,8 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 user_input[CONF_EXTERNAL_STATISTICS] = False
             self._data.update(user_input)
             if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
+                if self._data[CONF_TARIFF].lower() == "g13s":
+                    return await self.async_step_g13s_custom_prices()
                 return await self.async_step_custom_prices()
             return await self._next_after_prices()
         operator = self._data[CONF_OPERATOR]
@@ -286,6 +333,27 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=_prices_schema(
                 self._data[CONF_OPERATOR], self._data[CONF_TARIFF]
             ),
+        )
+
+    async def async_step_g13s_custom_prices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Collect four seasonal/day-type sets of gross G13s prices."""
+
+        period = G13S_PERIODS[self._g13s_period_index]
+        if user_input is not None:
+            self._g13s_prices.update(
+                {f"{period}_{zone}": value for zone, value in user_input.items()}
+            )
+            self._g13s_period_index += 1
+            if self._g13s_period_index == len(G13S_PERIODS):
+                self._data[CONF_CUSTOM_PRICES] = self._g13s_prices
+                return await self._next_after_prices()
+            period = G13S_PERIODS[self._g13s_period_index]
+        return self.async_show_form(
+            step_id="g13s_custom_prices",
+            data_schema=_g13s_prices_schema(period),
+            description_placeholders={"period": G13S_PERIOD_NAMES[period]},
         )
 
     async def _next_after_prices(self) -> ConfigFlowResult:
@@ -334,6 +402,8 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
 
     def __init__(self) -> None:
         self._options: dict[str, Any] = {}
+        self._g13s_period_index = 0
+        self._g13s_prices: dict[str, float] = {}
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -355,6 +425,8 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 if not get_tariff(operator, group).external_statistics_supported:
                     self._options[CONF_EXTERNAL_STATISTICS] = False
                 if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
+                    if group.lower() == "g13s":
+                        return await self.async_step_g13s_custom_prices()
                     return await self.async_step_custom_prices()
                 return await self._next_after_prices()
 
@@ -408,6 +480,28 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 self.config_entry.data[CONF_TARIFF],
                 self.config_entry.options.get(CONF_CUSTOM_PRICES),
             ),
+        )
+
+    async def async_step_g13s_custom_prices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit four seasonal/day-type sets of gross G13s prices."""
+
+        period = G13S_PERIODS[self._g13s_period_index]
+        if user_input is not None:
+            self._g13s_prices.update(
+                {f"{period}_{zone}": value for zone, value in user_input.items()}
+            )
+            self._g13s_period_index += 1
+            if self._g13s_period_index == len(G13S_PERIODS):
+                self._options[CONF_CUSTOM_PRICES] = self._g13s_prices
+                return await self._next_after_prices()
+            period = G13S_PERIODS[self._g13s_period_index]
+        current = {**self.config_entry.data, **self.config_entry.options}
+        return self.async_show_form(
+            step_id="g13s_custom_prices",
+            data_schema=_g13s_prices_schema(period, current.get(CONF_CUSTOM_PRICES)),
+            description_placeholders={"period": G13S_PERIOD_NAMES[period]},
         )
 
     async def _next_after_prices(self) -> ConfigFlowResult:
