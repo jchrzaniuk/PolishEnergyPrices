@@ -75,11 +75,27 @@ urządzenia `monetary`, ponieważ Home Assistant wymaga dla niej samego kodu
 waluty (`PLN`), a nie ceny za kWh. Jest to ten sam wzorzec, którego używa
 oficjalna integracja Nord Pool.
 
-Po kliknięciu encji **Cena energii brutto** okno szczegółów pokazuje po polsku
-pełne wyliczenie jednostkowe: cenę energii netto i brutto, akcyzę, VAT, składnik
-sieciowy, opłatę jakościową, OZE, kogeneracyjną, sumę dystrybucji oraz końcową
-cenę netto i brutto. Wszystkie kwoty mają jednostkę `PLN/kWh`. Niżej widoczne są
-aktywna strefa, okres obowiązywania i adresy dokumentów źródłowych.
+Home Assistant pokazuje w oknie szczegółów sensora liczbowego wykres i nie
+pozwala integracji backendowej zastąpić go własną tabelą. Dlatego integracja
+tworzy na tym samym urządzeniu osobne polskie encje diagnostyczne:
+
+- Energia czynna brutto;
+- Składnik sieciowy brutto;
+- Opłata jakościowa brutto;
+- Opłata OZE brutto;
+- Opłata kogeneracyjna brutto;
+- Dystrybucja brutto;
+- Akcyza netto;
+- VAT łącznie;
+- Cena łączna netto.
+
+Pierwszych pięć składników brutto sumuje się dokładnie do stanu encji **Cena
+energii brutto**. Wszystkie encje mają jednostkę `PLN/kWh` i są widoczne w
+sekcji diagnostycznej urządzenia utworzonego przez integrację.
+
+Aby stale widzieć całe rozbicie, dodaj do pulpitu zwykłą kartę **Encje**, a
+następnie wybierz główną cenę i wymienione wyżej składniki. Nie wymaga to HACS,
+karty niestandardowej ani ręcznych sensorów szablonowych.
 
 ### Liczniki udostępniające tylko statystyki zewnętrzne
 

@@ -9,6 +9,7 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -44,10 +45,45 @@ async def async_setup_entry(
     """Set up the current gross electricity price sensor."""
 
     sensor = PolishEnergyPriceSensor(entry, entry.runtime_data.coordinator)
-    async_add_entities([sensor])
+    component_sensors = [
+        PolishEnergyPriceComponentSensor(
+            entry,
+            entry.runtime_data.coordinator,
+            sensor,
+            key,
+            name,
+            icon,
+        )
+        for key, name, icon in PRICE_COMPONENTS
+    ]
+    entities = [sensor, *component_sensors]
+    async_add_entities(entities)
+
+    @callback
+    def handle_hour_change(_now: datetime) -> None:
+        for entity in entities:
+            entity.async_write_ha_state()
+
     entry.async_on_unload(
-        async_track_time_change(hass, sensor.handle_hour_change, minute=0, second=0)
+        async_track_time_change(hass, handle_hour_change, minute=0, second=0)
     )
+
+
+PRICE_COMPONENTS = (
+    ("energia_czynna_brutto", "Energia czynna brutto", "mdi:lightning-bolt"),
+    ("skladnik_sieciowy_brutto", "Składnik sieciowy brutto", "mdi:transmission-tower"),
+    ("oplata_jakosciowa_brutto", "Opłata jakościowa brutto", "mdi:sine-wave"),
+    ("oplata_oze_brutto", "Opłata OZE brutto", "mdi:solar-power"),
+    (
+        "oplata_kogeneracyjna_brutto",
+        "Opłata kogeneracyjna brutto",
+        "mdi:heat-wave",
+    ),
+    ("dystrybucja_brutto", "Dystrybucja brutto", "mdi:transmission-tower-export"),
+    ("akcyza_netto", "Akcyza netto", "mdi:bank"),
+    ("vat_lacznie", "VAT łącznie", "mdi:percent"),
+    ("cena_laczna_netto", "Cena łączna netto", "mdi:cash-minus"),
+)
 
 
 class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorEntity):
@@ -112,6 +148,36 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
         if not self.available:
             return None
         return self._breakdown().total
+
+    def price_components(self) -> dict[str, float]:
+        """Return numeric components shared by attributes and child sensors."""
+
+        result = self._breakdown()
+        system_rates = self.coordinator.data.system_net or {}
+        network_net = float(
+            (self.coordinator.data.distribution_net or self._tariff.distribution_net)[
+                result.zone_key
+            ]
+        )
+        quality_net = float(system_rates.get("quality", 0))
+        oze_net = float(system_rates.get("oze", 0))
+        cogeneration_net = float(system_rates.get("cogeneration", 0))
+        system_net = quality_net + oze_net + cogeneration_net
+        distribution_net = network_net + system_net
+        energy_net_with_excise = result.energy / VAT
+        return {
+            "energia_czynna_brutto": round(result.energy, 4),
+            "skladnik_sieciowy_brutto": round(network_net * VAT, 4),
+            "oplata_jakosciowa_brutto": round(quality_net * VAT, 4),
+            "oplata_oze_brutto": round(oze_net * VAT, 4),
+            "oplata_kogeneracyjna_brutto": round(cogeneration_net * VAT, 4),
+            "dystrybucja_brutto": round(result.distribution, 4),
+            "akcyza_netto": EXCISE_NET_PLN_KWH,
+            "vat_lacznie": round(
+                result.total - (energy_net_with_excise + distribution_net), 4
+            ),
+            "cena_laczna_netto": round(energy_net_with_excise + distribution_net, 4),
+        }
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -211,8 +277,49 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
             )
         return attributes
 
-    @callback
-    def handle_hour_change(self, now: datetime) -> None:
-        """Publish a state at every possible zone boundary."""
 
-        self.async_write_ha_state()
+class PolishEnergyPriceComponentSensor(
+    CoordinatorEntity[EnergyPriceCoordinator], SensorEntity
+):
+    """One native diagnostic entity used to present the price breakdown."""
+
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "PLN/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 4
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        coordinator: EnergyPriceCoordinator,
+        price_sensor: PolishEnergyPriceSensor,
+        component_key: str,
+        name: str,
+        icon: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._price_sensor = price_sensor
+        self._component_key = component_key
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_unique_id = f"{entry.entry_id}_price_component_{component_key}"
+        self._attr_suggested_object_id = component_key
+        self._attr_device_info = price_sensor.device_info
+
+    @property
+    def available(self) -> bool:
+        """Follow the validity of the complete annual price bundle."""
+
+        return super().available and self.coordinator.data.is_valid_on(
+            dt_util.now().date()
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return this component in PLN/kWh."""
+
+        if not self.available:
+            return None
+        return self._price_sensor.price_components()[self._component_key]
