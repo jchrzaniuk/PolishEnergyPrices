@@ -11,10 +11,7 @@ import unittest
 from zipfile import ZIP_DEFLATED, ZipFile
 
 MODULE_PATH = (
-    Path(__file__).parents[1]
-    / "custom_components"
-    / "polish_energy_price"
-    / "ure.py"
+    Path(__file__).parents[1] / "custom_components" / "polish_energy_price" / "ure.py"
 )
 SPEC = importlib.util.spec_from_file_location("polish_energy_ure", MODULE_PATH)
 assert SPEC and SPEC.loader
@@ -25,9 +22,7 @@ SPEC.loader.exec_module(ure)
 
 def _cell(column: str, row: int, value: str | float) -> str:
     if isinstance(value, str):
-        return (
-            f'<c r="{column}{row}" t="inlineStr"><is><t>{escape(value)}</t></is></c>'
-        )
+        return f'<c r="{column}{row}" t="inlineStr"><is><t>{escape(value)}</t></is></c>'
     return f'<c r="{column}{row}"><v>{value}</v></c>'
 
 
@@ -117,12 +112,22 @@ class UreParserTests(unittest.TestCase):
         content = workbook(
             [
                 row(
-                    A="PGE Obrót S.A.", B="Taryfa (G12N)", C="G12x (2 strefy)",
-                    D="Regulowana", F="PGE Dystrybucja S.A.", H=0.7221, I=0.5271,
+                    A="PGE Obrót S.A.",
+                    B="Taryfa (G12N)",
+                    C="G12x (2 strefy)",
+                    D="Regulowana",
+                    F="PGE Dystrybucja S.A.",
+                    H=0.7221,
+                    I=0.5271,
                 ),
                 row(
-                    A="PGE Obrót S.A.", B="Taryfa (G12W)", C="G12x (2 strefy)",
-                    D="Regulowana", F="PGE Dystrybucja S.A.", H=0.6840, I=0.4873,
+                    A="PGE Obrót S.A.",
+                    B="Taryfa (G12W)",
+                    C="G12x (2 strefy)",
+                    D="Regulowana",
+                    F="PGE Dystrybucja S.A.",
+                    H=0.6840,
+                    I=0.4873,
                 ),
             ]
         )

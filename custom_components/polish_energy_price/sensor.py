@@ -24,15 +24,12 @@ from .const import (
     DOMAIN,
     METER_CLOCK_FIXED_WINTER,
     PRICE_SOURCE_CUSTOM,
-    VALID_FROM,
-    VALID_UNTIL,
 )
 from .coordinator import EnergyPriceCoordinator
 from .tariff import (
     EXCISE_NET_PLN_KWH,
     OPERATOR_NAMES,
     SELLER_NAMES,
-    VALID_YEAR,
     VAT,
     get_tariff,
     price_at,
@@ -75,7 +72,7 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
             identifiers={(DOMAIN, entry.entry_id)},
             name=f"{OPERATOR_NAMES[self._operator]} {self._group}",
             manufacturer=OPERATOR_NAMES[self._operator],
-            model=f"Taryfa {self._group} (2026)",
+            model=(f"Taryfa {self._group} ({self.coordinator.data.valid_from[:4]})"),
         )
 
     def _settings(self) -> dict[str, Any]:
@@ -90,15 +87,20 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
             self._tariff,
             now or dt_util.now(),
             custom_energy=custom,
+            distribution_net=self.coordinator.data.distribution_net,
+            system_net=self.coordinator.data.system_total,
             day_hours=settings.get(CONF_DAY_HOURS),
-            fixed_winter_time=settings.get(CONF_METER_CLOCK) == METER_CLOCK_FIXED_WINTER,
+            fixed_winter_time=settings.get(CONF_METER_CLOCK)
+            == METER_CLOCK_FIXED_WINTER,
         )
 
     @property
     def available(self) -> bool:
         """Do not silently use expired annual tariffs."""
 
-        return super().available and dt_util.now().year == VALID_YEAR
+        return super().available and self.coordinator.data.is_valid_on(
+            dt_util.now().date()
+        )
 
     @property
     def native_value(self) -> float | None:
@@ -134,8 +136,22 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
             "price_source": "contract" if custom else self.coordinator.data.source,
             "energy_seller": "custom" if custom else SELLER_NAMES[self._operator],
             "fixed_monthly_fees_included": False,
-            "valid_from": VALID_FROM,
-            "valid_until": VALID_UNTIL,
+            "valid_from": self.coordinator.data.valid_from,
+            "valid_until": self.coordinator.data.valid_until,
+            "distribution_source_url": self.coordinator.data.distribution_source_url,
+            "system_source_url": self.coordinator.data.system_source_url,
+            "oze_source_url": self.coordinator.data.oze_source_url,
+            "cogeneration_source_url": (self.coordinator.data.cogeneration_source_url),
+            "official_tariffs_last_checked": self.coordinator.data.official_last_checked,
+            "official_tariffs_last_updated": self.coordinator.data.official_last_updated,
+            "official_tariffs_last_error": self.coordinator.data.official_error,
+            "quality_charge_net": (self.coordinator.data.system_net or {}).get(
+                "quality"
+            ),
+            "oze_charge_net": (self.coordinator.data.system_net or {}).get("oze"),
+            "cogeneration_charge_net": (self.coordinator.data.system_net or {}).get(
+                "cogeneration"
+            ),
         }
         if not custom:
             attributes.update(
@@ -144,7 +160,6 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
                     "ure_last_checked": self.coordinator.data.last_checked,
                     "ure_last_updated": self.coordinator.data.last_updated,
                     "ure_last_error": self.coordinator.data.error,
-                    "distribution_price_source": "bundled_osd_tariff_2026",
                 }
             )
         return attributes

@@ -7,19 +7,18 @@ wskazana w panelu Energia jako **encja z bieżącą ceną**.
 
 Integracja łączy cenę energii czynnej sprzedawcy z urzędu z właściwym dla
 aktualnej godziny składnikiem sieciowym, opłatą jakościową, OZE,
-kogeneracyjną i VAT-em. Co 12 godzin sprawdza oficjalną stronę URE „Masz
-wybór”, odnajduje najnowszy arkusz XLSX i aktualizuje cenę sprzedaży energii.
-Ostatni poprawny wynik jest zapisywany lokalnie; przy awarii URE używany jest
+kogeneracyjną i VAT-em. Co 12 godzin sprawdza cenę sprzedaży energii oraz
+urzędowe źródła wszystkich zmiennych składników rachunku. Ostatni poprawny,
+kompletny zestaw jest zapisywany lokalnie; przy awarii źródła używany jest
 cache, a przy pierwszym uruchomieniu — zweryfikowane stawki wbudowane.
 
 > [!IMPORTANT]
-> Wbudowane stawki dystrybucyjne i opłaty systemowe obowiązują od **1 stycznia
-> do 31 grudnia 2026 r.** Automatyczne sprawdzanie arkusza URE aktualizuje cenę
-> sprzedaży energii, ale nie zastępuje rocznych taryf dystrybucyjnych. Integracja
-> nie zawiera jeszcze stawek na 2027 r.; po 31 grudnia 2026 r. sensor celowo
-> przejdzie w stan niedostępny, aby nie naliczać kosztów według wygasłego
-> cennika. Okres taryf na 2026 r. potwierdza
-> [komunikat URE z 17.12.2025 r.](https://www.ure.gov.pl/pl/urzad/informacje-ogolne/aktualnosci/13002,Prezes-Urzedu-Regulacji-Energetyki-zatwierdzil-taryfy-na-sprzedaz-i-dystrybucje.html).
+> Stawki wbudowane są bezpiecznym punktem startowym na okres **1.01–31.12.2026**,
+> ale nie są już jedynym źródłem. Integracja wykrywa dokument na bieżący rok,
+> sprawdza kompletność wszystkich stref i dopiero wtedy aktywuje nowy zestaw.
+> Jeżeli nowa taryfa nie zostanie opublikowana albo zmieni się układ dokumentu,
+> wygasły zestaw nie jest używany po swojej dacie końcowej — sensor staje się
+> niedostępny i pokazuje błąd źródła w atrybutach.
 
 ## Obsługiwane taryfy
 
@@ -168,19 +167,27 @@ zużycia.
 
 ## Źródła danych
 
-- taryfy dystrybucyjne pięciu OSD zatwierdzone decyzjami Prezesa URE z
-  17.12.2025 r.;
-- cenniki grup G na 2026 r.: TAURON Sprzedaż, PGE Obrót, ENERGA-OBRÓT,
-  ENEA S.A. i E.ON Polska;
-- przygotowany zbiór `taryfy_osd_2026.json` i dokumenty w
-  `HEMS/dokumentacja_techniczna/taryfy_osd`;
-- stawki wspólne netto: jakościowa `0,0332`, OZE `0,0073` i kogeneracyjna
-  `0,0030 PLN/kWh`.
+Automatyzacja rozdziela źródła zgodnie z tym, kto ustala daną opłatę:
 
-Arkusz URE zawiera wyłącznie oferty **sprzedaży energii** i wprost nie obejmuje
-kosztów dystrybucji. Stawki dystrybucyjne pozostają więc wbudowane na podstawie
-zatwierdzonych rocznych taryf pięciu OSD; integracja nie przypisuje arkuszowi
-danych, których w nim nie ma.
+- cena energii czynnej — najnowszy arkusz XLSX dla gospodarstw domowych na
+  stronie URE „Masz wybór”;
+- składnik zmienny sieciowy i stawka jakościowa — aktualna taryfa lub wyciąg
+  opublikowany przez właściwego OSD; dla ENEA i ENERGA używany jest również
+  oficjalny serwis dokumentów ENERGA, a dla PGE jego dokument operatora;
+- opłata OZE — tabela „Stawki opłaty OZE” w BIP URE;
+- opłata kogeneracyjna — rozporządzenie wyszukiwane przez oficjalne API ELI i
+  pobierane z Dziennika Ustaw.
+
+Taryfa PSE nie jest źródłem ceny dla klienta końcowego. Stawka jakościowa jest
+odczytywana z dokumentu OSD, który stosuje ją w rozliczeniach swoich odbiorców.
+
+Każdy PDF musi potwierdzać właściwy rok i zawierać kompletną liczbę stref, a
+wartości muszą przejść kontrolę zakresów. Zmiana adresu dokumentu nie wystarcza
+do aktualizacji ceny. W atrybutach sensora dostępne są osobne adresy źródeł,
+czas ostatniej kontroli, czas ostatniej poprawnej aktualizacji i ostatni błąd.
+
+Arkusz URE zawiera wyłącznie oferty **sprzedaży energii** i nie obejmuje kosztów
+dystrybucji; integracja nie przypisuje mu danych, których w nim nie ma.
 
 Home Assistant opisuje [encje sensorów](https://developers.home-assistant.io/docs/core/entity/sensor/)
 i [konfigurację taryf w panelu Energia](https://www.home-assistant.io/docs/energy/electricity-grid/)

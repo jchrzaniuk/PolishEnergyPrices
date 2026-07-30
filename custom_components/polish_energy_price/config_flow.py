@@ -68,7 +68,9 @@ def _price_source_selector() -> SelectSelector:
 def _meter_clock_selector() -> SelectSelector:
     return _select(
         [
-            SelectOptionDict(value=METER_CLOCK_LOCAL, label="czas lokalny (licznik AMI)"),
+            SelectOptionDict(
+                value=METER_CLOCK_LOCAL, label="czas lokalny (licznik AMI)"
+            ),
             SelectOptionDict(
                 value=METER_CLOCK_FIXED_WINTER,
                 label="stały czas zimowy (starszy licznik)",
@@ -86,7 +88,10 @@ def _operator_schema(default: str | None = None) -> vol.Schema:
     return vol.Schema(
         {
             marker: _select(
-                [SelectOptionDict(value=key, label=name) for key, name in OPERATOR_NAMES.items()]
+                [
+                    SelectOptionDict(value=key, label=name)
+                    for key, name in OPERATOR_NAMES.items()
+                ]
             )
         }
     )
@@ -96,7 +101,9 @@ def _tariff_schema(operator: str, defaults: dict[str, Any] | None = None) -> vol
     defaults = defaults or {}
     groups = groups_for(operator)
     schema: dict[Any, Any] = {
-        vol.Required(CONF_TARIFF, default=defaults.get(CONF_TARIFF, groups[0])): _select(
+        vol.Required(
+            CONF_TARIFF, default=defaults.get(CONF_TARIFF, groups[0])
+        ): _select(
             [
                 SelectOptionDict(
                     value=group,
@@ -111,10 +118,12 @@ def _tariff_schema(operator: str, defaults: dict[str, Any] | None = None) -> vol
         ): _meter_clock_selector(),
     }
     if operator == "enea":
-        schema[vol.Optional(
-            CONF_DAY_HOURS,
-            default=defaults.get(CONF_DAY_HOURS, "6-13,15-22"),
-        )] = TextSelector()
+        schema[
+            vol.Optional(
+                CONF_DAY_HOURS,
+                default=defaults.get(CONF_DAY_HOURS, "6-13,15-22"),
+            )
+        ] = TextSelector()
     return vol.Schema(schema)
 
 
@@ -185,7 +194,9 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Select an OSD."""
 
         if user_input is not None:
@@ -238,7 +249,9 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
             return await self._next_after_prices()
         return self.async_show_form(
             step_id="custom_prices",
-            data_schema=_prices_schema(self._data[CONF_OPERATOR], self._data[CONF_TARIFF]),
+            data_schema=_prices_schema(
+                self._data[CONF_OPERATOR], self._data[CONF_TARIFF]
+            ),
         )
 
     async def _next_after_prices(self) -> ConfigFlowResult:
@@ -324,10 +337,12 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
             ): BooleanSelector(),
         }
         if operator == "enea" and group == "G12":
-            schema[vol.Optional(
-                CONF_DAY_HOURS,
-                default=current.get(CONF_DAY_HOURS, "6-13,15-22"),
-            )] = TextSelector()
+            schema[
+                vol.Optional(
+                    CONF_DAY_HOURS,
+                    default=current.get(CONF_DAY_HOURS, "6-13,15-22"),
+                )
+            ] = TextSelector()
         return self.async_show_form(
             step_id="init", data_schema=vol.Schema(schema), errors=errors
         )
@@ -366,7 +381,11 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
             else:
                 self._options.update(user_input)
                 return self.async_create_entry(data=self._options)
-        current = {**self.config_entry.data, **self.config_entry.options, **self._options}
+        current = {
+            **self.config_entry.data,
+            **self.config_entry.options,
+            **self._options,
+        }
         return self.async_show_form(
             step_id="external_statistics",
             data_schema=_external_statistics_schema(

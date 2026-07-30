@@ -9,10 +9,7 @@ import sys
 import unittest
 
 MODULE_PATH = (
-    Path(__file__).parents[1]
-    / "custom_components"
-    / "polish_energy_price"
-    / "cost.py"
+    Path(__file__).parents[1] / "custom_components" / "polish_energy_price" / "cost.py"
 )
 SPEC = importlib.util.spec_from_file_location("polish_energy_cost", MODULE_PATH)
 assert SPEC and SPEC.loader

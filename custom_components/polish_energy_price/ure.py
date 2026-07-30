@@ -172,7 +172,9 @@ def _price(value: object) -> float:
 
 
 def _contains_group(text: str, group: str) -> bool:
-    return re.search(rf"(?:^| )({re.escape(group.casefold())})(?: |$)", text) is not None
+    return (
+        re.search(rf"(?:^| )({re.escape(group.casefold())})(?: |$)", text) is not None
+    )
 
 
 def _matching_rows(

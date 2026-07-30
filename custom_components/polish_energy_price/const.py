@@ -22,9 +22,6 @@ PRICE_SOURCE_CUSTOM = "custom"
 METER_CLOCK_LOCAL = "local_time"
 METER_CLOCK_FIXED_WINTER = "fixed_winter_time"
 
-VALID_FROM = "2026-01-01"
-VALID_UNTIL = "2026-12-31"
-
 
 def external_statistic_key(zone: str) -> str:
     """Return the config key used to map a tariff zone to an energy statistic."""

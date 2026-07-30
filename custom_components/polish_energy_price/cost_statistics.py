@@ -31,7 +31,6 @@ from .const import (
     CONF_TARIFF,
     DOMAIN,
     PRICE_SOURCE_CUSTOM,
-    VALID_FROM,
     external_statistic_key,
 )
 from .coordinator import EnergyPriceCoordinator
@@ -84,7 +83,11 @@ class ExternalCostStatisticsManager:
             energy_prices = self.coordinator.data.prices
         return {
             zone: price_for_zone(
-                self.tariff, zone, custom_energy=energy_prices
+                self.tariff,
+                zone,
+                custom_energy=energy_prices,
+                distribution_net=self.coordinator.data.distribution_net,
+                system_net=self.coordinator.data.system_total,
             ).total
             for zone in self.tariff.zones
         }
@@ -113,9 +116,7 @@ class ExternalCostStatisticsManager:
             return
 
         prices = self._prices()
-        signature = json.dumps(
-            {"mappings": mappings, "prices": prices}, sort_keys=True
-        )
+        signature = json.dumps({"mappings": mappings, "prices": prices}, sort_keys=True)
         stored = await self.store.async_load() or {}
         full_refresh = stored.get("signature") != signature
 
@@ -138,7 +139,9 @@ class ExternalCostStatisticsManager:
                 f"Statystyki muszą zawierać narastającą energię: {sorted(invalid)}"
             )
 
-        valid_from = datetime.fromisoformat(VALID_FROM).replace(tzinfo=WARSAW)
+        valid_from = datetime.fromisoformat(self.coordinator.data.valid_from).replace(
+            tzinfo=WARSAW
+        )
         start = valid_from.astimezone(timezone.utc)
         if not full_refresh:
             latest_starts: list[float] = []
@@ -157,9 +160,10 @@ class ExternalCostStatisticsManager:
                     break
                 latest_starts.append(float(rows[-1]["start"]))
             if not full_refresh and latest_starts:
-                start = datetime.fromtimestamp(
-                    min(latest_starts), tz=timezone.utc
-                ) - LOOKBACK
+                start = (
+                    datetime.fromtimestamp(min(latest_starts), tz=timezone.utc)
+                    - LOOKBACK
+                )
 
         source_rows = await recorder.async_add_executor_job(
             partial(

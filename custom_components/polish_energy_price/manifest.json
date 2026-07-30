@@ -7,6 +7,6 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/jchrzaniuk/PolishEnergyPrices/issues",
-  "requirements": [],
-  "version": "1.2.2"
+  "requirements": ["pypdf==6.1.1"],
+  "version": "1.3.0"
 }

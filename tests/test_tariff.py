@@ -35,7 +35,9 @@ class TariffTests(unittest.TestCase):
                 result = tariff.price_at(definition, instant)
                 self.assertIn(result.zone_key, definition.zones)
                 self.assertGreater(result.total, 0)
-                self.assertEqual(result.total, round(result.energy + result.distribution, 4))
+                self.assertEqual(
+                    result.total, round(result.energy + result.distribution, 4)
+                )
             instant += timedelta(hours=1)
 
     def test_tauron_g13_winter_prices_and_weekend(self) -> None:
@@ -48,7 +50,9 @@ class TariffTests(unittest.TestCase):
         self.assertEqual("szczyt_przedpoludniowy", morning.zone_key)
         self.assertEqual("szczyt_popoludniowy", afternoon.zone_key)
         self.assertEqual("pozostale", weekend.zone_key)
-        self.assertEqual((0.6257, 0.9048, 1.4961), (off.total, morning.total, afternoon.total))
+        self.assertEqual(
+            (0.6257, 0.9048, 1.4961), (off.total, morning.total, afternoon.total)
+        )
 
     def test_explicit_zone_prices_match_tauron_g13_meter_registers(self) -> None:
         definition = tariff.get_tariff("tauron", "G13")

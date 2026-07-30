@@ -94,7 +94,10 @@ def _season(
     return Season(
         start,
         end,
-        {key: tuple((int(a), int(b)) for a, b in windows) for key, windows in hours.items()},
+        {
+            key: tuple((int(a), int(b)) for a, b in windows)
+            for key, windows in hours.items()
+        },
     )
 
 
@@ -163,115 +166,199 @@ def _tariff(
 
 TARIFFS: dict[tuple[str, str], TariffDefinition] = {
     ("tauron", "G11"): _tariff(
-        "tauron", "G11", ("calodobowa",), ALL_DAY,
-        {"calodobowa": 0.2464}, {"calodobowa": 0.6175},
+        "tauron",
+        "G11",
+        ("calodobowa",),
+        ALL_DAY,
+        {"calodobowa": 0.2464},
+        {"calodobowa": 0.6175},
         description="jednostrefowa",
     ),
     ("tauron", "G12"): _tariff(
-        "tauron", "G12", ("dzienna", "nocna"), STANDARD_DAY_NIGHT,
+        "tauron",
+        "G12",
+        ("dzienna", "nocna"),
+        STANDARD_DAY_NIGHT,
         {"dzienna": 0.2841, "nocna": 0.0558},
         {"dzienna": 0.6740, "nocna": 0.5141},
         description="dwustrefowa dzień/noc",
     ),
     ("tauron", "G12w"): _tariff(
-        "tauron", "G12w", ("szczytowa", "pozaszczytowa"),
-        (_season({"szczytowa": ((6, 13), (15, 22)), "pozaszczytowa": ((13, 15), (22, 6))}),),
+        "tauron",
+        "G12w",
+        ("szczytowa", "pozaszczytowa"),
+        (
+            _season(
+                {"szczytowa": ((6, 13), (15, 22)), "pozaszczytowa": ((13, 15), (22, 6))}
+            ),
+        ),
         {"szczytowa": 0.3298, "pozaszczytowa": 0.0512},
         {"szczytowa": 0.7712, "pozaszczytowa": 0.5141},
-        off_peak_zone="pozaszczytowa", description="weekendowa",
+        off_peak_zone="pozaszczytowa",
+        description="weekendowa",
     ),
     ("tauron", "G13"): _tariff(
-        "tauron", "G13",
+        "tauron",
+        "G13",
         ("szczyt_przedpoludniowy", "szczyt_popoludniowy", "pozostale"),
         TAURON_G13_SEASONS,
-        {"szczyt_przedpoludniowy": 0.2203, "szczyt_popoludniowy": 0.3898, "pozostale": 0.0392},
-        {"szczyt_przedpoludniowy": 0.5803, "szczyt_popoludniowy": 0.9631, "pozostale": 0.5240},
-        off_peak_zone="pozostale", description="trójstrefowa sezonowa",
+        {
+            "szczyt_przedpoludniowy": 0.2203,
+            "szczyt_popoludniowy": 0.3898,
+            "pozostale": 0.0392,
+        },
+        {
+            "szczyt_przedpoludniowy": 0.5803,
+            "szczyt_popoludniowy": 0.9631,
+            "pozostale": 0.5240,
+        },
+        off_peak_zone="pozostale",
+        description="trójstrefowa sezonowa",
     ),
     ("pge", "G11"): _tariff(
-        "pge", "G11", ("calodobowa",), ALL_DAY,
-        {"calodobowa": 0.3469}, {"calodobowa": 0.6189}, description="jednostrefowa",
+        "pge",
+        "G11",
+        ("calodobowa",),
+        ALL_DAY,
+        {"calodobowa": 0.3469},
+        {"calodobowa": 0.6189},
+        description="jednostrefowa",
     ),
     ("pge", "G12"): _tariff(
-        "pge", "G12", ("dzienna", "nocna"), PGE_SEASONAL_DAY_NIGHT,
+        "pge",
+        "G12",
+        ("dzienna", "nocna"),
+        PGE_SEASONAL_DAY_NIGHT,
         {"dzienna": 0.4014, "nocna": 0.0765},
-        {"dzienna": 0.7018, "nocna": 0.4635}, description="dwustrefowa sezonowa",
+        {"dzienna": 0.7018, "nocna": 0.4635},
+        description="dwustrefowa sezonowa",
     ),
     ("pge", "G12w"): _tariff(
-        "pge", "G12w", ("dzienna", "nocna"), PGE_SEASONAL_DAY_NIGHT,
+        "pge",
+        "G12w",
+        ("dzienna", "nocna"),
+        PGE_SEASONAL_DAY_NIGHT,
         {"dzienna": 0.4276, "nocna": 0.0845},
         {"dzienna": 0.7221, "nocna": 0.5271},
-        off_peak_zone="nocna", description="weekendowa sezonowa",
+        off_peak_zone="nocna",
+        description="weekendowa sezonowa",
     ),
     ("pge", "G12n"): _tariff(
-        "pge", "G12n", ("dzienna", "nocna"),
+        "pge",
+        "G12n",
+        ("dzienna", "nocna"),
         (_season({"dzienna": ((5, 1),), "nocna": ((1, 5),)}),),
         {"dzienna": 0.3470, "nocna": 0.0347},
         {"dzienna": 0.6840, "nocna": 0.4873},
-        off_peak_zone="nocna", off_peak_days="sunday_holiday",
+        off_peak_zone="nocna",
+        off_peak_days="sunday_holiday",
         description="nocna 1:00–5:00; niedziele i święta całodobowo",
     ),
     ("energa", "G11"): _tariff(
-        "energa", "G11", ("calodobowa",), ALL_DAY,
-        {"calodobowa": 0.3485}, {"calodobowa": 0.6172}, description="jednostrefowa",
+        "energa",
+        "G11",
+        ("calodobowa",),
+        ALL_DAY,
+        {"calodobowa": 0.3485},
+        {"calodobowa": 0.6172},
+        description="jednostrefowa",
     ),
     ("energa", "G12"): _tariff(
-        "energa", "G12", ("dzienna", "nocna"), STANDARD_DAY_NIGHT,
+        "energa",
+        "G12",
+        ("dzienna", "nocna"),
+        STANDARD_DAY_NIGHT,
         {"dzienna": 0.3844, "nocna": 0.0827},
-        {"dzienna": 0.7182, "nocna": 0.4678}, description="dwustrefowa dzień/noc",
+        {"dzienna": 0.7182, "nocna": 0.4678},
+        description="dwustrefowa dzień/noc",
     ),
     ("energa", "G12w"): _tariff(
-        "energa", "G12w", ("dzienna", "nocna"), STANDARD_DAY_NIGHT,
+        "energa",
+        "G12w",
+        ("dzienna", "nocna"),
+        STANDARD_DAY_NIGHT,
         {"dzienna": 0.4017, "nocna": 0.0851},
         {"dzienna": 0.7512, "nocna": 0.4908},
-        off_peak_zone="nocna", description="weekendowa",
+        off_peak_zone="nocna",
+        description="weekendowa",
     ),
     ("energa", "G12r"): _tariff(
-        "energa", "G12r", ("szczytowa", "pozaszczytowa"),
-        (_season({"szczytowa": ((7, 13), (16, 22)), "pozaszczytowa": ((13, 16), (22, 7))}),),
+        "energa",
+        "G12r",
+        ("szczytowa", "pozaszczytowa"),
+        (
+            _season(
+                {"szczytowa": ((7, 13), (16, 22)), "pozaszczytowa": ((13, 16), (22, 7))}
+            ),
+        ),
         {"szczytowa": 0.3640, "pozaszczytowa": 0.0882},
         {"szczytowa": 0.8262, "pozaszczytowa": 0.3772},
         description="Ekonomiczna Dolina",
     ),
     ("stoen", "G11"): _tariff(
-        "stoen", "G11", ("calodobowa",), ALL_DAY,
-        {"calodobowa": 0.2342}, {"calodobowa": 0.6212}, description="jednostrefowa",
+        "stoen",
+        "G11",
+        ("calodobowa",),
+        ALL_DAY,
+        {"calodobowa": 0.2342},
+        {"calodobowa": 0.6212},
+        description="jednostrefowa",
     ),
     ("stoen", "G12"): _tariff(
-        "stoen", "G12", ("dzienna", "nocna"), STANDARD_DAY_NIGHT,
+        "stoen",
+        "G12",
+        ("dzienna", "nocna"),
+        STANDARD_DAY_NIGHT,
         {"dzienna": 0.2545, "nocna": 0.0555},
-        {"dzienna": 0.6635, "nocna": 0.5283}, description="dwustrefowa dzień/noc",
+        {"dzienna": 0.6635, "nocna": 0.5283},
+        description="dwustrefowa dzień/noc",
     ),
     ("stoen", "G12w"): _tariff(
-        "stoen", "G12w", ("szczytowa", "pozaszczytowa"),
+        "stoen",
+        "G12w",
+        ("szczytowa", "pozaszczytowa"),
         (_season({"szczytowa": ((6, 22),), "pozaszczytowa": ((22, 6),)}),),
         {"szczytowa": 0.2570, "pozaszczytowa": 0.1079},
         {"szczytowa": 0.6512, "pozaszczytowa": 0.5467},
-        off_peak_zone="pozaszczytowa", description="weekendowa",
+        off_peak_zone="pozaszczytowa",
+        description="weekendowa",
     ),
     ("stoen", "G12as"): _tariff(
-        "stoen", "G12as", ("dzienna", "nocna"),
+        "stoen",
+        "G12as",
+        ("dzienna", "nocna"),
         (_season({"dzienna": ((6, 22),), "nocna": ((22, 6),)}),),
         {"dzienna": 0.2342, "nocna": 0.2342},
         {"dzienna": 0.6758, "nocna": 0.5344},
         description="antysmogowa; bez rozliczania nadwyżki nocnej",
     ),
     ("enea", "G11"): _tariff(
-        "enea", "G11", ("calodobowa",), ALL_DAY,
-        {"calodobowa": 0.2456}, {"calodobowa": 0.6187}, description="jednostrefowa",
+        "enea",
+        "G11",
+        ("calodobowa",),
+        ALL_DAY,
+        {"calodobowa": 0.2456},
+        {"calodobowa": 0.6187},
+        description="jednostrefowa",
     ),
     ("enea", "G12"): _tariff(
-        "enea", "G12", ("dzienna", "nocna"), STANDARD_DAY_NIGHT,
+        "enea",
+        "G12",
+        ("dzienna", "nocna"),
+        STANDARD_DAY_NIGHT,
         {"dzienna": 0.2779, "nocna": 0.0913},
         {"dzienna": 0.7170, "nocna": 0.4205},
         description="dwustrefowa; godziny można nadpisać z umowy",
     ),
     ("enea", "G12w"): _tariff(
-        "enea", "G12w", ("szczytowa", "pozaszczytowa"),
+        "enea",
+        "G12w",
+        ("szczytowa", "pozaszczytowa"),
         (_season({"szczytowa": ((6, 21),), "pozaszczytowa": ((21, 6),)}),),
         {"szczytowa": 0.2702, "pozaszczytowa": 0.0813},
         {"szczytowa": 0.8079, "pozaszczytowa": 0.4323},
-        off_peak_zone="pozaszczytowa", description="weekendowa",
+        off_peak_zone="pozaszczytowa",
+        description="weekendowa",
     ),
 }
 
@@ -367,11 +454,20 @@ def polish_holidays(year: int) -> frozenset[date]:
     easter = _easter_sunday(year)
     return frozenset(
         {
-            date(year, 1, 1), date(year, 1, 6), date(year, 5, 1),
-            date(year, 5, 3), date(year, 8, 15), date(year, 11, 1),
-            date(year, 11, 11), date(year, 12, 24), date(year, 12, 25),
-            date(year, 12, 26), easter, easter + timedelta(days=1),
-            easter + timedelta(days=49), easter + timedelta(days=60),
+            date(year, 1, 1),
+            date(year, 1, 6),
+            date(year, 5, 1),
+            date(year, 5, 3),
+            date(year, 8, 15),
+            date(year, 11, 1),
+            date(year, 11, 11),
+            date(year, 12, 24),
+            date(year, 12, 25),
+            date(year, 12, 26),
+            easter,
+            easter + timedelta(days=1),
+            easter + timedelta(days=49),
+            easter + timedelta(days=60),
         }
     )
 
@@ -413,7 +509,9 @@ def zone_at(
     for zone, windows in hours.items():
         if _covers(windows, local.hour):
             return zone
-    raise RuntimeError(f"Brak strefy dla {tariff.operator}:{tariff.group} {local.isoformat()}")
+    raise RuntimeError(
+        f"Brak strefy dla {tariff.operator}:{tariff.group} {local.isoformat()}"
+    )
 
 
 def price_at(
@@ -421,6 +519,8 @@ def price_at(
     ts: datetime,
     *,
     custom_energy: Mapping[str, float] | None = None,
+    distribution_net: Mapping[str, float] | None = None,
+    system_net: float | None = None,
     day_hours: str | None = None,
     fixed_winter_time: bool = False,
 ) -> PriceBreakdown:
@@ -432,7 +532,13 @@ def price_at(
         day_hours=day_hours,
         fixed_winter_time=fixed_winter_time,
     )
-    return price_for_zone(tariff, zone, custom_energy=custom_energy)
+    return price_for_zone(
+        tariff,
+        zone,
+        custom_energy=custom_energy,
+        distribution_net=distribution_net,
+        system_net=system_net,
+    )
 
 
 def price_for_zone(
@@ -440,16 +546,22 @@ def price_for_zone(
     zone: str,
     *,
     custom_energy: Mapping[str, float] | None = None,
+    distribution_net: Mapping[str, float] | None = None,
+    system_net: float | None = None,
 ) -> PriceBreakdown:
     """Calculate the gross marginal price for one explicit tariff zone."""
 
     if zone not in tariff.zones:
-        raise ValueError(f"Nieznana strefa {zone!r} taryfy {tariff.operator}:{tariff.group}")
+        raise ValueError(
+            f"Nieznana strefa {zone!r} taryfy {tariff.operator}:{tariff.group}"
+        )
     prices = custom_energy if custom_energy else tariff.energy_gross
     energy = round(float(prices[zone]), 4)
-    network = round(float(tariff.distribution_net[zone]) * VAT, 4)
-    system = round(SYSTEM_NET_PLN_KWH * VAT, 4)
-    distribution = round((float(tariff.distribution_net[zone]) + SYSTEM_NET_PLN_KWH) * VAT, 4)
+    network_rates = distribution_net or tariff.distribution_net
+    system_rate = SYSTEM_NET_PLN_KWH if system_net is None else float(system_net)
+    network = round(float(network_rates[zone]) * VAT, 4)
+    system = round(system_rate * VAT, 4)
+    distribution = round((float(network_rates[zone]) + system_rate) * VAT, 4)
     return PriceBreakdown(
         zone_key=zone,
         zone_name=ZONE_LABELS[zone],
