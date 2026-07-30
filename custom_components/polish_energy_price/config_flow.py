@@ -214,15 +214,7 @@ def _g13s_prices_schema(
                 default=defaults.get(
                     f"{period}_{zone}", tariff.energy_gross[f"{period}_{zone}"]
                 ),
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=0,
-                    max=10,
-                    step=0.0001,
-                    mode=NumberSelectorMode.BOX,
-                    unit_of_measurement="PLN/kWh",
-                )
-            )
+            ): vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
             for zone in G13S_BASE_ZONES
         }
     )
