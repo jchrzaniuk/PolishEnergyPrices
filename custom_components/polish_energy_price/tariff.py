@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 VAT = 1.23
+EXCISE_NET_PLN_KWH = 0.005
 SYSTEM_NET_PLN_KWH = 0.0332 + 0.0073 + 0.0030
 VALID_YEAR = 2026
 
@@ -78,6 +79,7 @@ class PriceBreakdown:
     zone_key: str
     zone_name: str
     energy: float
+    excise: float
     network: float
     system: float
     distribution: float
@@ -436,11 +438,14 @@ def price_at(
     system = round(SYSTEM_NET_PLN_KWH * VAT, 4)
     distribution = round((float(tariff.distribution_net[zone]) + SYSTEM_NET_PLN_KWH) * VAT, 4)
     return PriceBreakdown(
-        zone,
-        ZONE_LABELS[zone],
-        energy,
-        network,
-        system,
-        distribution,
-        round(energy + distribution, 4),
+        zone_key=zone,
+        zone_name=ZONE_LABELS[zone],
+        energy=energy,
+        # Energy prices supplied by URE and accepted in the config flow are
+        # already gross.  Expose the duty explicitly, but never add it twice.
+        excise=round(EXCISE_NET_PLN_KWH * VAT, 4),
+        network=network,
+        system=system,
+        distribution=distribution,
+        total=round(energy + distribution, 4),
     )

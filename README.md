@@ -5,9 +5,12 @@ gospodarstw domowych przyłączonych do jednego z pięciu największych OSD:
 TAURON, PGE, ENERGA, Stoen i ENEA. Encja ma jednostkę `PLN/kWh` i może zostać
 wskazana w panelu Energia jako **encja z bieżącą ceną**.
 
-Integracja działa całkowicie lokalnie. Łączy cenę energii czynnej sprzedawcy
-z urzędu z właściwym dla aktualnej godziny składnikiem sieciowym, opłatą
-jakościową, OZE, kogeneracyjną i VAT-em.
+Integracja łączy cenę energii czynnej sprzedawcy z urzędu z właściwym dla
+aktualnej godziny składnikiem sieciowym, opłatą jakościową, OZE,
+kogeneracyjną i VAT-em. Co 12 godzin sprawdza oficjalną stronę URE „Masz
+wybór”, odnajduje najnowszy arkusz XLSX i aktualizuje cenę sprzedaży energii.
+Ostatni poprawny wynik jest zapisywany lokalnie; przy awarii URE używany jest
+cache, a przy pierwszym uruchomieniu — zweryfikowane stawki wbudowane.
 
 > [!IMPORTANT]
 > Wbudowane stawki obowiązują od **1 stycznia do 31 grudnia 2026 r.** Po tej
@@ -49,7 +52,7 @@ uruchom Home Assistant ponownie.
 3. Wybierz OSD i grupę taryfową z faktury.
 4. Dla nowego licznika zdalnego wybierz `czas lokalny (licznik AMI)`.
 5. Wybierz źródło ceny energii:
-   - cennik regulowany — jeżeli masz sprzedawcę z urzędu z tabeli powyżej;
+   - automatyczne ceny URE — jeżeli masz sprzedawcę z urzędu z tabeli powyżej;
    - własne ceny brutto — jeżeli zmieniłeś sprzedawcę lub ofertę.
 
 Dla ENEA G12 sprawdź godziny na umowie albo liczniku. Taryfa określa liczbę
@@ -74,11 +77,16 @@ oficjalna integracja Nord Pool.
 Stan encji to koszt krańcowy:
 
 ```text
-energia czynna brutto
+energia czynna brutto = (cena netto + 0,005 zł/kWh akcyzy) × 1,23
 + (sieć zmienna + jakościowa + OZE + kogeneracyjna) × 1,23
 ```
 
-Atrybuty encji pokazują aktywną strefę i rozbicie kwoty. Cena nie obejmuje opłat
+Atrybuty encji pokazują aktywną strefę, rozbicie kwoty, jawny składnik akcyzy,
+adres użytego arkusza URE oraz czas ostatniej kontroli i aktualizacji. Ceny
+energii w arkuszu URE są już cenami brutto „z akcyzą i VAT”, dlatego integracja
+nie dolicza akcyzy drugi raz. Akcyza nie dotyczy dystrybucji.
+
+Cena nie obejmuje opłat
 miesięcznych: składnika stałego sieciowego, abonamentu, opłaty handlowej ani
 ryczałtowej opłaty mocowej gospodarstwa domowego. Tych opłat nie da się uczciwie
 przeliczyć na bieżącą cenę jednej dodatkowej kWh bez założenia miesięcznego
@@ -94,6 +102,11 @@ zużycia.
   `HEMS/dokumentacja_techniczna/taryfy_osd`;
 - stawki wspólne netto: jakościowa `0,0332`, OZE `0,0073` i kogeneracyjna
   `0,0030 PLN/kWh`.
+
+Arkusz URE zawiera wyłącznie oferty **sprzedaży energii** i wprost nie obejmuje
+kosztów dystrybucji. Stawki dystrybucyjne pozostają więc wbudowane na podstawie
+zatwierdzonych rocznych taryf pięciu OSD; integracja nie przypisuje arkuszowi
+danych, których w nim nie ma.
 
 Home Assistant opisuje [encje sensorów](https://developers.home-assistant.io/docs/core/entity/sensor/)
 i [konfigurację taryf w panelu Energia](https://www.home-assistant.io/docs/energy/electricity-grid/)

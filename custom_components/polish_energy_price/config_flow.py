@@ -51,7 +51,7 @@ def _price_source_selector() -> SelectSelector:
         [
             SelectOptionDict(
                 value=PRICE_SOURCE_REGULATED,
-                label="sprzedawca z urzędu — cennik regulowany 2026",
+                label="sprzedawca z urzędu — automatyczne ceny URE",
             ),
             SelectOptionDict(
                 value=PRICE_SOURCE_CUSTOM,

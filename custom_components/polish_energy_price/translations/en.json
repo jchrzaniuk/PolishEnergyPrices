@@ -23,7 +23,7 @@
       },
       "energy": {
         "title": "Select the energy price source",
-        "description": "The regulated price applies to the default seller. If you switched seller or offer, enter the gross prices from your contract.",
+        "description": "Default-seller prices are checked against the official URE workbook every 12 hours. If you switched seller or offer, enter the gross prices from your contract.",
         "data": {
           "price_source": "Energy price source"
         }
@@ -51,7 +51,7 @@
     "step": {
       "init": {
         "title": "Energy price settings",
-        "description": "Change the price source, ENEA G12 hours, or meter clock behavior.",
+        "description": "Change the price source, ENEA G12 hours, or meter clock behavior. URE prices are checked every 12 hours.",
         "data": {
           "price_source": "Energy price source",
           "meter_clock": "Meter clock behavior",
@@ -85,4 +85,3 @@
     }
   }
 }
-

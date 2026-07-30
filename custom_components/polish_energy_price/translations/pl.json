@@ -23,7 +23,7 @@
       },
       "energy": {
         "title": "Wybierz źródło ceny energii",
-        "description": "Cennik regulowany dotyczy sprzedawcy z urzędu. Jeśli zmieniono sprzedawcę lub wybrano ofertę komercyjną, podaj ceny brutto z umowy.",
+        "description": "Ceny sprzedawcy z urzędu są sprawdzane w oficjalnym arkuszu URE co 12 godzin. Jeśli zmieniono sprzedawcę lub wybrano ofertę komercyjną, podaj ceny brutto z umowy.",
         "data": {
           "price_source": "Źródło ceny energii"
         }
@@ -51,7 +51,7 @@
     "step": {
       "init": {
         "title": "Ustawienia ceny energii",
-        "description": "Zmień źródło ceny, godziny ENEA G12 lub sposób pracy zegara licznika.",
+        "description": "Zmień źródło ceny, godziny ENEA G12 lub sposób pracy zegara licznika. Ceny URE są sprawdzane co 12 godzin.",
         "data": {
           "price_source": "Źródło ceny energii",
           "meter_clock": "Sposób pracy zegara licznika",
@@ -85,4 +85,3 @@
     }
   }
 }
-

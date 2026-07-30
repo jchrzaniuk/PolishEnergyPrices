@@ -101,6 +101,16 @@ class TariffTests(unittest.TestCase):
         self.assertEqual(0.8, custom.energy)
         self.assertEqual(round(0.8 + custom.distribution, 4), custom.total)
 
+    def test_excise_is_included_once_and_exposed_explicitly(self) -> None:
+        definition = tariff.get_tariff("tauron", "G11")
+        result = tariff.price_at(definition, at("2026-01-15T12:00:00+01:00"))
+        self.assertEqual(0.6175, result.energy)
+        self.assertEqual(0.0062, result.excise)
+        self.assertEqual(
+            0.6175,
+            round((0.4970 + tariff.EXCISE_NET_PLN_KWH) * tariff.VAT, 4),
+        )
+
     def test_invalid_hour_overlaps_are_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "nachodzić"):
             tariff.parse_day_hours("6-13,12-22")
