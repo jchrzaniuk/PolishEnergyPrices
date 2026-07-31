@@ -35,6 +35,10 @@ cennika ofertowego TAURON, a nie z taryfy sprzedawcy z urzędu w arkuszu URE.
 
 ## Instalacja
 
+Użytkownicy openHAB i innych systemów mogą uruchomić wspólny silnik cen jako
+kontener z HTTP i MQTT. Instrukcja, plik Compose oraz gotowe przykłady Things i
+Items znajdują się w [service/README.md](service/README.md).
+
 ### HACS (repozytorium niestandardowe)
 
 1. W HACS otwórz **Integracje** → menu → **Niestandardowe repozytoria**.
@@ -264,8 +268,9 @@ w oficjalnej dokumentacji.
 Testy nie wymagają instalacji Home Assistant:
 
 ```bash
+python3 -m pip install -r service/requirements.txt
 python3 -m unittest discover -s tests -v
-python3 -m compileall -q custom_components tests
+python3 -m compileall -q custom_components service tests
 ```
 
 Sprawdzane jest m.in. pokrycie każdej godziny 2026 r. dla wszystkich 20 taryf,

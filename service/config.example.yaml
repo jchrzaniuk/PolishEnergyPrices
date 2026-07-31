@@ -1,0 +1,36 @@
+# Każdy profil publikuje osobny zestaw tematów MQTT i osobny zasób HTTP.
+profiles:
+  dom:
+    operator: tauron
+    tariff: G13s
+    price_source: tauron_g13s
+    meter_clock: local_time
+
+  # Przykład taryfy z własną ceną energii:
+  # domek:
+  #   operator: pge
+  #   tariff: G11
+  #   price_source: custom
+  #   meter_clock: local_time
+  #   custom_prices:
+  #     calodobowa: 0.7500
+
+http:
+  host: 0.0.0.0
+  port: 8080
+
+mqtt:
+  enabled: true
+  host: mqtt
+  port: 1883
+  client_id: polish-energy-prices
+  # Dane można też podać jako ${MQTT_USERNAME} i ${MQTT_PASSWORD}.
+  username:
+  password:
+  topic_prefix: polish_energy_prices
+  qos: 1
+  retain: true
+  tls: false
+
+refresh_interval_hours: 12
+data_dir: /data

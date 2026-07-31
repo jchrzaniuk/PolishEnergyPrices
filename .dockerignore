@@ -1,0 +1,13 @@
+.git
+.github
+.ruff_cache
+__pycache__
+*.py[cod]
+.tokenGitHub
+.tokenHA
+.git-askpass.sh
+tmp
+tests
+openhab
+README.md
+compose.yaml

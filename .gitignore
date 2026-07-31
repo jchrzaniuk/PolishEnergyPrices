@@ -5,3 +5,5 @@ __pycache__/
 .tokenGitHub
 .tokenHA
 .git-askpass.sh
+service/config.yaml
+.env

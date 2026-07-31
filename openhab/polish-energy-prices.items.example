@@ -1,0 +1,15 @@
+Number:EnergyPrice PEP_CenaBrutto "Cena energii brutto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:priceGross" }
+Number:EnergyPrice PEP_EnergiaBrutto "Energia czynna brutto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:energyGross" }
+Number:EnergyPrice PEP_DystrybucjaBrutto "Dystrybucja brutto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:distributionGross" }
+Number:EnergyPrice PEP_SiecBrutto "Składnik sieciowy brutto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:networkGross" }
+Number:EnergyPrice PEP_JakosciowaBrutto "Opłata jakościowa brutto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:qualityGross" }
+Number:EnergyPrice PEP_OZEBrutto "Opłata OZE brutto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:ozeGross" }
+Number:EnergyPrice PEP_KogeneracjaBrutto "Opłata kogeneracyjna brutto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:cogenerationGross" }
+Number:EnergyPrice PEP_AkcyzaNetto "Akcyza netto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:exciseNet" }
+Number:EnergyPrice PEP_VATLacznie "VAT łącznie [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:vatTotal" }
+Number:EnergyPrice PEP_CenaNetto "Cena łączna netto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:priceNet" }
+String PEP_Strefa "Aktywna strefa [%s]" { channel="mqtt:topic:pepBroker:pepDom:zone" }
+String PEP_Zrodlo "Źródło ceny [%s]" { channel="mqtt:topic:pepBroker:pepDom:source" }
+String PEP_StanZrodel "Stan źródeł [%s]" { channel="mqtt:topic:pepBroker:pepDom:sourceStatus" }
+Switch PEP_WaznaTaryfa "Ważna taryfa" { channel="mqtt:topic:pepBroker:pepDom:profileAvailable" }
+DateTime PEP_OstatnieObliczenie "Ostatnie obliczenie [%1$tF %1$tR]" { channel="mqtt:topic:pepBroker:pepDom:lastCalculated" }

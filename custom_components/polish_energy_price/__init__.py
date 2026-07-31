@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from typing import TYPE_CHECKING
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.event import async_track_time_interval
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
-from .const import PLATFORMS
-from .coordinator import EnergyPriceCoordinator
-from .cost_statistics import ExternalCostStatisticsManager
+    from .coordinator import EnergyPriceCoordinator
+    from .cost_statistics import ExternalCostStatisticsManager
 
 
 @dataclass(slots=True)
@@ -24,6 +23,14 @@ class PolishEnergyPriceRuntimeData:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Polish Energy Prices from a config entry."""
+
+    from datetime import timedelta
+
+    from homeassistant.helpers.event import async_track_time_interval
+
+    from .const import PLATFORMS
+    from .coordinator import EnergyPriceCoordinator
+    from .cost_statistics import ExternalCostStatisticsManager
 
     coordinator = EnergyPriceCoordinator(hass, entry)
     await coordinator.async_initialize()
@@ -41,5 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+
+    from .const import PLATFORMS
 
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

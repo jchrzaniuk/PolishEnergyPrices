@@ -1,0 +1,30 @@
+Bridge mqtt:broker:pepBroker "Broker MQTT" [
+    host="192.168.1.10",
+    port=1883,
+    secure=false,
+    username="openhab",
+    password="zmien-to-haslo"
+]
+
+Thing mqtt:topic:pepDom "Polish Energy Prices, dom" (mqtt:broker:pepBroker) [
+    availabilityTopic="polish_energy_prices/availability",
+    payloadAvailable="online",
+    payloadNotAvailable="offline"
+] {
+    Channels:
+    Type number   : priceGross        "Cena energii brutto"       [ stateTopic="polish_energy_prices/dom/price_gross",        unit="PLN/kWh" ]
+    Type number   : energyGross       "Energia czynna brutto"     [ stateTopic="polish_energy_prices/dom/energy_gross",       unit="PLN/kWh" ]
+    Type number   : distributionGross "Dystrybucja brutto"        [ stateTopic="polish_energy_prices/dom/distribution_gross", unit="PLN/kWh" ]
+    Type number   : networkGross      "Składnik sieciowy brutto"  [ stateTopic="polish_energy_prices/dom/network_gross",      unit="PLN/kWh" ]
+    Type number   : qualityGross      "Opłata jakościowa brutto"  [ stateTopic="polish_energy_prices/dom/quality_gross",      unit="PLN/kWh" ]
+    Type number   : ozeGross          "Opłata OZE brutto"         [ stateTopic="polish_energy_prices/dom/oze_gross",          unit="PLN/kWh" ]
+    Type number   : cogenerationGross "Opłata kogeneracyjna"      [ stateTopic="polish_energy_prices/dom/cogeneration_gross", unit="PLN/kWh" ]
+    Type number   : exciseNet         "Akcyza netto"              [ stateTopic="polish_energy_prices/dom/excise_net",         unit="PLN/kWh" ]
+    Type number   : vatTotal          "VAT łącznie"               [ stateTopic="polish_energy_prices/dom/vat_total",          unit="PLN/kWh" ]
+    Type number   : priceNet          "Cena łączna netto"         [ stateTopic="polish_energy_prices/dom/price_net",          unit="PLN/kWh" ]
+    Type string   : zone              "Aktywna strefa"            [ stateTopic="polish_energy_prices/dom/zone_name" ]
+    Type string   : source            "Źródło ceny"               [ stateTopic="polish_energy_prices/dom/energy_source" ]
+    Type string   : sourceStatus      "Stan źródeł"               [ stateTopic="polish_energy_prices/dom/source_status" ]
+    Type switch   : profileAvailable  "Ważna taryfa"              [ stateTopic="polish_energy_prices/dom/availability", on="online", off="offline" ]
+    Type datetime : lastCalculated    "Ostatnie obliczenie"       [ stateTopic="polish_energy_prices/dom/last_calculated" ]
+}

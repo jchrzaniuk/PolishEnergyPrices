@@ -1,0 +1,17 @@
+services:
+  polish-energy-prices:
+    image: ghcr.io/jchrzaniuk/polish-energy-prices:latest
+    container_name: polish-energy-prices
+    restart: unless-stopped
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      PEP_LOG_LEVEL: ${PEP_LOG_LEVEL:-INFO}
+    volumes:
+      - ./service/config.yaml:/config/config.yaml:ro
+      - polish-energy-prices-data:/data
+    ports:
+      - "8080:8080"
+
+volumes:
+  polish-energy-prices-data:
