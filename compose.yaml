@@ -1,6 +1,6 @@
 services:
   polish-energy-prices:
-    image: ghcr.io/jchrzaniuk/polish-energy-prices:latest
+    image: ${PEP_IMAGE:-ghcr.io/jchrzaniuk/polish-energy-prices:latest}
     container_name: polish-energy-prices
     restart: unless-stopped
     environment:

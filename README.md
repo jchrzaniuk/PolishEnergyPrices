@@ -1,11 +1,15 @@
-# Polish Energy Prices dla Home Assistant
+# Polish Energy Prices
 
-Natywna integracja Home Assistant obliczająca **bieżącą cenę brutto 1 kWh** dla
-gospodarstw domowych przyłączonych do jednego z pięciu największych OSD:
-TAURON, PGE, ENERGA, Stoen i ENEA. Encja ma jednostkę `PLN/kWh` i może zostać
-wskazana w panelu Energia jako **encja z bieżącą ceną**.
+Projekt oblicza **bieżącą cenę brutto 1 kWh** dla gospodarstw domowych
+przyłączonych do jednego z pięciu największych OSD: TAURON, PGE, ENERGA, Stoen
+i ENEA. Można go używać jako natywnej integracji Home Assistant albo jako
+niezależnej usługi Docker z HTTP i MQTT dla openHAB oraz innych systemów.
 
-Integracja łączy cenę energii czynnej sprzedawcy z urzędu z właściwym dla
+W Home Assistant encja ma jednostkę `PLN/kWh` i może zostać wskazana w panelu
+Energia jako **encja z bieżącą ceną**. Kontener publikuje tę samą cenę wraz ze
+składnikami przez API HTTP i retained MQTT.
+
+Silnik łączy cenę energii czynnej sprzedawcy z urzędu z właściwym dla
 aktualnej godziny składnikiem sieciowym, opłatą jakościową, OZE,
 kogeneracyjną i VAT-em. Co 12 godzin sprawdza cenę sprzedaży energii oraz
 urzędowe źródła wszystkich zmiennych składników rachunku. Ostatni poprawny,
@@ -17,8 +21,86 @@ cache, a przy pierwszym uruchomieniu — zweryfikowane stawki wbudowane.
 > ale nie są już jedynym źródłem. Integracja wykrywa dokument na bieżący rok,
 > sprawdza kompletność wszystkich stref i dopiero wtedy aktywuje nowy zestaw.
 > Jeżeli nowa taryfa nie zostanie opublikowana albo zmieni się układ dokumentu,
-> wygasły zestaw nie jest używany po swojej dacie końcowej — sensor staje się
-> niedostępny i pokazuje błąd źródła w atrybutach.
+> wygasły zestaw nie jest używany po swojej dacie końcowej. Sensor albo profil
+> kontenera staje się niedostępny i pokazuje błąd źródła.
+
+## Docker, openHAB i inne systemy
+
+Publiczny obraz działa na `amd64` i `arm64`. Nie wymaga Home Assistanta ani
+logowania do GHCR:
+
+```text
+ghcr.io/jchrzaniuk/polish-energy-prices:latest
+ghcr.io/jchrzaniuk/polish-energy-prices:v1.5.0
+```
+
+### Uruchomienie gotowego obrazu
+
+Potrzebujesz Docker Engine z poleceniem `docker compose` oraz działającego
+brokera MQTT.
+
+1. Pobierz repozytorium i przejdź do jego katalogu:
+
+   ```bash
+   git clone https://github.com/jchrzaniuk/PolishEnergyPrices.git
+   cd PolishEnergyPrices
+   ```
+
+2. Utwórz własny plik konfiguracji:
+
+   ```bash
+   cp service/config.example.yaml service/config.yaml
+   ```
+
+3. W `service/config.yaml` ustaw operatora, taryfę i źródło ceny. Zmień też
+   `mqtt.host` z przykładowego `mqtt` na adres brokera widoczny z kontenera.
+   W razie potrzeby wpisz użytkownika i hasło przez zmienne opisane w
+   [pełnej instrukcji usługi](service/README.md).
+
+4. Uruchom kontener:
+
+   ```bash
+   docker compose up -d
+   ```
+
+5. Sprawdź proces, log i odpowiedzi HTTP:
+
+   ```bash
+   docker compose ps
+   docker compose logs --tail=100 polish-energy-prices
+   curl http://localhost:8080/health
+   curl http://localhost:8080/api/price/dom
+   ```
+
+6. Dla openHAB dostosuj gotowe pliki
+   [Things](openhab/polish-energy-prices.things.example) i
+   [Items](openhab/polish-energy-prices.items.example). Opis tematów MQTT,
+   endpointów HTTP, wielu profili i cache znajduje się w
+   [service/README.md](service/README.md).
+
+Zatrzymanie usługi nie usuwa zapisanych stawek z woluminu:
+
+```bash
+docker compose down
+```
+
+### Budowanie obrazu lokalnie
+
+Jeżeli chcesz zbudować obraz z aktualnego kodu zamiast pobierać go z GHCR:
+
+```bash
+docker build -t polish-energy-prices:local .
+PEP_IMAGE=polish-energy-prices:local docker compose up -d
+```
+
+Compose uruchomi wtedy lokalny obraz z tym samym plikiem
+`service/config.yaml` i woluminem danych. Powrót do obrazu publicznego wymaga
+zatrzymania usługi i ponownego uruchomienia bez zmiennej `PEP_IMAGE`:
+
+```bash
+docker compose down
+docker compose up -d
+```
 
 ## Obsługiwane taryfy
 
@@ -33,11 +115,7 @@ cache, a przy pierwszym uruchomieniu — zweryfikowane stawki wbudowane.
 Lista w formularzu zależy od wybranego OSD. Dla G13s cena energii pochodzi z
 cennika ofertowego TAURON, a nie z taryfy sprzedawcy z urzędu w arkuszu URE.
 
-## Instalacja
-
-Użytkownicy openHAB i innych systemów mogą uruchomić wspólny silnik cen jako
-kontener z HTTP i MQTT. Instrukcja, plik Compose oraz gotowe przykłady Things i
-Items znajdują się w [service/README.md](service/README.md).
+## Instalacja w Home Assistant
 
 ### HACS (repozytorium niestandardowe)
 
@@ -52,7 +130,7 @@ Skopiuj katalog `custom_components/polish_energy_price` do katalogu
 `config/custom_components/` swojej instalacji Home Assistant, a następnie
 uruchom Home Assistant ponownie.
 
-## Konfiguracja
+## Konfiguracja w Home Assistant
 
 1. Otwórz **Ustawienia → Urządzenia i usługi → Dodaj integrację**.
 2. Wyszukaj „Polish Energy Prices”.
