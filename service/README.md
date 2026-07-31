@@ -19,10 +19,18 @@ potrzebuje dostępu do Home Assistanta ani openHAB.
    docker compose up -d
    ```
 
-   Obraz jest publikowany jako
-   `ghcr.io/jchrzaniuk/polish-energy-prices:latest`. Po pierwszej publikacji
-   pakiet GHCR musi mieć widoczność publiczną, aby użytkownicy nie potrzebowali
-   logowania do rejestru.
+   Publiczny obraz jest dostępny bez logowania dla architektur `amd64` i
+   `arm64`. Tag `latest` wskazuje najnowszą wersję:
+
+   ```text
+   ghcr.io/jchrzaniuk/polish-energy-prices:latest
+   ```
+
+   Aby przypiąć konfigurację do wydania 1.5.0, ustaw w `compose.yaml`:
+
+   ```text
+   ghcr.io/jchrzaniuk/polish-energy-prices:v1.5.0
+   ```
 
 4. Sprawdź odpowiedź:
 
