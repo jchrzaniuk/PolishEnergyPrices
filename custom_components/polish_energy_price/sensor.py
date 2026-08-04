@@ -27,7 +27,9 @@ from .const import (
     PRICE_SOURCE_CUSTOM,
 )
 from .coordinator import EnergyPriceCoordinator
+from .forecast import build_forecast, forecast_attributes
 from .tariff import (
+    DynamicZoneUnavailable,
     EXCISE_NET_PLN_KWH,
     OPERATOR_NAMES,
     SELLER_NAMES,
@@ -131,15 +133,42 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
             day_hours=settings.get(CONF_DAY_HOURS),
             fixed_winter_time=settings.get(CONF_METER_CLOCK)
             == METER_CLOCK_FIXED_WINTER,
+            dynamic_zones=self.coordinator.data.dynamic_zones,
+        )
+
+    def _forecast(self, now: datetime | None = None):
+        """Build the forecast from the coordinator's current data snapshot."""
+
+        settings = self._settings()
+        custom = (
+            settings.get(CONF_CUSTOM_PRICES)
+            if settings.get(CONF_PRICE_SOURCE) == PRICE_SOURCE_CUSTOM
+            else None
+        )
+        return build_forecast(
+            self._tariff,
+            self.coordinator.data,
+            now or dt_util.now(),
+            custom_energy=custom,
+            day_hours=settings.get(CONF_DAY_HOURS),
+            fixed_winter_time=settings.get(CONF_METER_CLOCK)
+            == METER_CLOCK_FIXED_WINTER,
         )
 
     @property
     def available(self) -> bool:
         """Do not silently use expired annual tariffs."""
 
-        return super().available and self.coordinator.data.is_valid_on(
+        if not super().available or not self.coordinator.data.is_valid_on(
             dt_util.now().date()
-        )
+        ):
+            return False
+        if self._tariff.dynamic_zone_source:
+            try:
+                self._breakdown()
+            except DynamicZoneUnavailable:
+                return False
+        return True
 
     @property
     def native_value(self) -> float | None:
@@ -183,7 +212,27 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose an auditable split of the current price."""
 
-        result = self._breakdown()
+        try:
+            result = self._breakdown()
+        except DynamicZoneUnavailable as err:
+            attributes: dict[str, Any] = {
+                "Operator sieci": OPERATOR_NAMES[self._operator],
+                "Grupa taryfowa": self._group,
+                "Źródło stref dynamicznych": (
+                    self.coordinator.data.dynamic_source_url
+                ),
+                "Ostatnia kontrola stref dynamicznych": (
+                    self.coordinator.data.dynamic_last_checked
+                ),
+                "Ostatnia publikacja stref PSE": (
+                    self.coordinator.data.dynamic_publication_utc
+                ),
+                "Ostatni błąd stref dynamicznych": (
+                    self.coordinator.data.dynamic_error or str(err)
+                ),
+            }
+            attributes.update(forecast_attributes(self._forecast()))
+            return attributes
         settings = self._settings()
         custom = settings.get(CONF_PRICE_SOURCE) == PRICE_SOURCE_CUSTOM
         system_rates = self.coordinator.data.system_net or {}
@@ -212,6 +261,12 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
             "tauron_g13s": "aktualny oficjalny cennik G13s TAURON",
             "tauron_g13s_cache": (
                 "ostatni poprawny cennik G13s TAURON z pamięci podręcznej"
+            ),
+            "tauron_g14dynamic": (
+                "aktualny oficjalny cennik Prąd ze zmienną dystrybucją TAURON"
+            ),
+            "tauron_g14dynamic_cache": (
+                "ostatni poprawny cennik G14dynamic TAURON z pamięci podręcznej"
             ),
             "bundled": "zweryfikowane stawki wbudowane",
         }
@@ -279,6 +334,27 @@ class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorE
                     "Ostatni błąd ceny energii": self.coordinator.data.error or "Brak",
                 }
             )
+        if self._tariff.dynamic_zone_source:
+            attributes.update(
+                {
+                    "Źródło stref dynamicznych": (
+                        self.coordinator.data.dynamic_source_url
+                    ),
+                    "Ostatnia kontrola stref dynamicznych": (
+                        self.coordinator.data.dynamic_last_checked
+                    ),
+                    "Ostatnia aktualizacja stref dynamicznych": (
+                        self.coordinator.data.dynamic_last_updated
+                    ),
+                    "Ostatnia publikacja stref PSE": (
+                        self.coordinator.data.dynamic_publication_utc
+                    ),
+                    "Ostatni błąd stref dynamicznych": (
+                        self.coordinator.data.dynamic_error or "Brak"
+                    ),
+                }
+            )
+        attributes.update(forecast_attributes(self._forecast()))
         return attributes
 
 
@@ -316,9 +392,7 @@ class PolishEnergyPriceComponentSensor(
     def available(self) -> bool:
         """Follow the validity of the complete annual price bundle."""
 
-        return super().available and self.coordinator.data.is_valid_on(
-            dt_util.now().date()
-        )
+        return super().available and self._price_sensor.available
 
     @property
     def native_value(self) -> float | None:

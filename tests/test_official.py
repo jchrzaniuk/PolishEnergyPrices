@@ -151,6 +151,37 @@ class OfficialTariffTests(unittest.TestCase):
         self.assertEqual(0.3332, rates["zima_dzien_roboczy_dzienna_szczytowa"])
         self.assertEqual(0.0400, rates["lato_dzien_wolny_dzienna_pozaszczytowa"])
 
+    def test_parses_tauron_g14dynamic_energy_and_distribution(self) -> None:
+        energy_text = (
+            "Cennik G14dynamic\nCena/stawka (brutto) od 01.01.2026\n"
+            "0,6175 0,6175 0,6175 0,6175\n"
+            + "x" * 600
+        )
+        distribution_text = (
+            "Taryfa TAURON Dystrybucja na rok 2026\n"
+            "G14dynamic 0,0224 0,0893 0,3881 2,3756 7,38 10,86\n"
+            + "x" * 600
+        )
+        zones = (
+            "S1_zalecane_uzytkowanie",
+            "S2_normalne",
+            "S3_zalecane_oszczedzanie",
+            "S4_wymagane_ograniczenie",
+        )
+        with patch.object(official, "extract_pdf_text", return_value=energy_text):
+            prices = official.parse_tauron_g14dynamic_prices(b"ignored")
+        with patch.object(
+            official, "extract_pdf_text", return_value=distribution_text
+        ):
+            rates = official.parse_distribution_pdf(
+                b"ignored", "tauron", "G14dynamic", zones, 2026
+            )
+        self.assertEqual({zone: 0.6175 for zone in zones}, prices)
+        self.assertEqual(
+            dict(zip(zones, (0.0224, 0.0893, 0.3881, 2.3756), strict=True)),
+            rates,
+        )
+
     def test_rejects_partial_network_rates(self) -> None:
         text = "Taryfa 2026\nG12 0,2841\n" + "x" * 600
         with patch.object(official, "extract_pdf_text", return_value=text):

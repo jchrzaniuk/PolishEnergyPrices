@@ -42,6 +42,7 @@ from .const import (
     PRICE_SOURCE_CUSTOM,
     PRICE_SOURCE_REGULATED,
     PRICE_SOURCE_TAURON_G13S,
+    PRICE_SOURCE_TAURON_G14DYNAMIC,
     external_statistic_key,
 )
 from .tariff import (
@@ -78,6 +79,19 @@ def _price_source_selector(operator: str, group: str) -> SelectSelector:
                 SelectOptionDict(
                     value=PRICE_SOURCE_TAURON_G13S,
                     label="najnowsza oferta G13s TAURON — automatycznie",
+                ),
+            ]
+        )
+    if operator == "tauron" and group.lower() == "g14dynamic":
+        return _select(
+            [
+                SelectOptionDict(
+                    value=PRICE_SOURCE_TAURON_G14DYNAMIC,
+                    label="oficjalny cennik Prąd ze zmienną dystrybucją — automatycznie",
+                ),
+                SelectOptionDict(
+                    value=PRICE_SOURCE_CUSTOM,
+                    label="mój cennik — ceny brutto z umowy",
                 ),
             ]
         )
@@ -183,6 +197,21 @@ def _prices_schema(
 ) -> vol.Schema:
     tariff = get_tariff(operator, group)
     defaults = defaults or dict(tariff.energy_gross)
+    if tariff.dynamic_zone_source:
+        default_price = next(iter(defaults.values()))
+        return vol.Schema(
+            {
+                vol.Required("calodobowa", default=default_price): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0,
+                        max=10,
+                        step=0.0001,
+                        mode=NumberSelectorMode.BOX,
+                        unit_of_measurement="PLN/kWh",
+                    )
+                )
+            }
+        )
     return vol.Schema(
         {
             vol.Required(
@@ -199,6 +228,18 @@ def _prices_schema(
             for zone in tariff.zones
         }
     )
+
+
+def _custom_price_values(
+    operator: str, group: str, values: dict[str, float]
+) -> dict[str, float]:
+    """Expand the single sales price used by a dynamic distribution tariff."""
+
+    tariff = get_tariff(operator, group)
+    if not tariff.dynamic_zone_source:
+        return values
+    price = float(values["calodobowa"])
+    return {zone: price for zone in tariff.zones}
 
 
 def _g13s_prices_schema(
@@ -340,7 +381,11 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
         default = (
             PRICE_SOURCE_CUSTOM
             if operator == "tauron" and group.lower() == "g13s"
-            else PRICE_SOURCE_REGULATED
+            else (
+                PRICE_SOURCE_TAURON_G14DYNAMIC
+                if operator == "tauron" and group.lower() == "g14dynamic"
+                else PRICE_SOURCE_REGULATED
+            )
         )
         return self.async_show_form(
             step_id="energy",
@@ -353,7 +398,9 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
         """Collect gross prices from the user's contract."""
 
         if user_input is not None:
-            self._data[CONF_CUSTOM_PRICES] = user_input
+            self._data[CONF_CUSTOM_PRICES] = _custom_price_values(
+                self._data[CONF_OPERATOR], self._data[CONF_TARIFF], user_input
+            )
             return await self._next_after_prices()
         return self.async_show_form(
             step_id="custom_prices",
@@ -471,7 +518,12 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                     (
                         PRICE_SOURCE_CUSTOM
                         if operator == "tauron" and group.lower() == "g13s"
-                        else PRICE_SOURCE_REGULATED
+                        else (
+                            PRICE_SOURCE_TAURON_G14DYNAMIC
+                            if operator == "tauron"
+                            and group.lower() == "g14dynamic"
+                            else PRICE_SOURCE_REGULATED
+                        )
                     ),
                 ),
             ): _price_source_selector(operator, group),
@@ -504,7 +556,11 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
         """Edit gross contract prices."""
 
         if user_input is not None:
-            self._options[CONF_CUSTOM_PRICES] = user_input
+            self._options[CONF_CUSTOM_PRICES] = _custom_price_values(
+                self.config_entry.data[CONF_OPERATOR],
+                self.config_entry.data[CONF_TARIFF],
+                user_input,
+            )
             return await self._next_after_prices()
         return self.async_show_form(
             step_id="custom_prices",

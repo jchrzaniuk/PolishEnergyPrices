@@ -23,7 +23,7 @@
       },
       "energy": {
         "title": "Wybierz źródło ceny energii",
-        "description": "Ceny sprzedawcy z urzędu są sprawdzane w arkuszu URE co 12 godzin. Dla G13s można użyć własnego cennika albo najnowszej oferty ze strony TAURON. Ponieważ cena G13s jest gwarantowana przez okres umowy, wybierz automat tylko wtedy, gdy odpowiada Twojemu cennikowi.",
+        "description": "Ceny sprzedawcy z urzędu są sprawdzane w arkuszu URE co 12 godzin. G13s i G14dynamic korzystają z właściwych cenników TAURON. Strefy G14dynamic są pobierane z Energetycznego Kompasu PSE co 15 minut.",
         "data": {
           "price_source": "Źródło ceny energii",
           "external_statistics": "Utwórz koszty dla zewnętrznych statystyk zużycia"
@@ -34,7 +34,7 @@
       },
       "custom_prices": {
         "title": "Podaj ceny energii brutto",
-        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh. Integracja osobno doliczy dystrybucję. G13s wymaga czterech zestawów po trzy ceny zgodnie z cennikiem umowy.",
+        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh. Integracja osobno doliczy dystrybucję. G13s wymaga czterech zestawów po trzy ceny, a G14dynamic jednej ceny sprzedażowej.",
         "data": {
           "calodobowa": "Strefa całodobowa",
           "dzienna": "Strefa dzienna",
@@ -103,7 +103,7 @@
       },
       "custom_prices": {
         "title": "Podaj ceny energii brutto",
-        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh. G13s wymaga czterech zestawów po trzy ceny zgodnie z cennikiem umowy.",
+        "description": "Podaj cenę samej energii czynnej wraz z VAT i akcyzą w PLN/kWh. G13s wymaga czterech zestawów po trzy ceny, a G14dynamic jednej ceny sprzedażowej.",
         "data": {
           "calodobowa": "Strefa całodobowa",
           "dzienna": "Strefa dzienna",

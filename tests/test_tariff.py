@@ -26,12 +26,18 @@ def at(value: str) -> datetime:
 
 
 class TariffTests(unittest.TestCase):
-    def test_all_20_tariffs_cover_every_hour_of_2026(self) -> None:
-        self.assertEqual(20, len(tariff.TARIFFS))
+    def test_all_20_static_tariffs_cover_every_hour_of_2026(self) -> None:
+        self.assertEqual(21, len(tariff.TARIFFS))
+        static_tariffs = [
+            item
+            for item in tariff.TARIFFS.values()
+            if item.dynamic_zone_source is None
+        ]
+        self.assertEqual(20, len(static_tariffs))
         instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
         end = datetime(2027, 1, 1, tzinfo=timezone.utc)
         while instant < end:
-            for definition in tariff.TARIFFS.values():
+            for definition in static_tariffs:
                 result = tariff.price_at(definition, instant)
                 self.assertIn(result.zone_key, definition.zones)
                 self.assertGreater(result.total, 0)
@@ -109,6 +115,29 @@ class TariffTests(unittest.TestCase):
             tariff.zone_at(definition, at("2026-12-24T12:00:00+01:00")),
         )
         self.assertTrue(definition.external_statistics_supported)
+
+    def test_tauron_g14dynamic_uses_an_absolute_kompas_hour(self) -> None:
+        definition = tariff.get_tariff("tauron", "g14dynamic")
+        instant = at("2026-08-04T12:30:00+02:00")
+        key = tariff.dynamic_hour_key(instant)
+        result = tariff.price_at(
+            definition,
+            instant,
+            dynamic_zones={key: "S1_zalecane_uzytkowanie"},
+        )
+        self.assertEqual("S1_zalecane_uzytkowanie", result.zone_key)
+        self.assertEqual(0.6175, result.energy)
+        self.assertEqual(0.6986, result.total)
+        self.assertFalse(definition.external_statistics_supported)
+
+    def test_tauron_g14dynamic_refuses_to_guess_a_missing_zone(self) -> None:
+        definition = tariff.get_tariff("tauron", "G14dynamic")
+        with self.assertRaisesRegex(tariff.DynamicZoneUnavailable, "Brak strefy"):
+            tariff.price_at(
+                definition,
+                at("2026-08-04T12:30:00+02:00"),
+                dynamic_zones={},
+            )
 
     def test_pge_g12_changes_hours_between_seasons(self) -> None:
         definition = tariff.get_tariff("pge", "G12")

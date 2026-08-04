@@ -6,8 +6,9 @@ i ENEA. Można go używać jako natywnej integracji Home Assistant albo jako
 niezależnej usługi Docker z HTTP i MQTT dla openHAB oraz innych systemów.
 
 W Home Assistant encja ma jednostkę `PLN/kWh` i może zostać wskazana w panelu
-Energia jako **encja z bieżącą ceną**. Kontener publikuje tę samą cenę wraz ze
-składnikami przez API HTTP i retained MQTT.
+Energia jako **encja z bieżącą ceną**. Jej atrybuty zawierają także prognozę
+kosztu krańcowego na następne 48 godzin. Kontener publikuje bieżącą cenę i tę
+samą prognozę przez API HTTP oraz retained MQTT.
 
 Silnik łączy cenę energii czynnej sprzedawcy z urzędu z właściwym dla
 aktualnej godziny składnikiem sieciowym, opłatą jakościową, OZE,
@@ -31,7 +32,7 @@ logowania do GHCR:
 
 ```text
 ghcr.io/jchrzaniuk/polish-energy-prices:latest
-ghcr.io/jchrzaniuk/polish-energy-prices:v1.5.0
+ghcr.io/jchrzaniuk/polish-energy-prices:v1.6.0
 ```
 
 ### Uruchomienie gotowego obrazu
@@ -106,14 +107,15 @@ docker compose up -d
 
 | OSD | Sprzedawca z urzędu | Taryfy z kompletną ceną energii |
 |---|---|---|
-| TAURON Dystrybucja | TAURON Sprzedaż | G11, G12, G12w, G13, G13s |
+| TAURON Dystrybucja | TAURON Sprzedaż | G11, G12, G12w, G13, G13s, G14dynamic |
 | PGE Dystrybucja | PGE Obrót | G11, G12, G12w, G12n |
 | ENERGA-OPERATOR | ENERGA-OBRÓT | G11, G12, G12w, G12r |
 | Stoen Operator | E.ON Polska | G11, G12, G12w, G12as |
 | ENEA Operator | ENEA S.A. | G11, G12, G12w |
 
-Lista w formularzu zależy od wybranego OSD. Dla G13s cena energii pochodzi z
-cennika ofertowego TAURON, a nie z taryfy sprzedawcy z urzędu w arkuszu URE.
+Lista w formularzu zależy od wybranego OSD. Dla G13s i G14dynamic cena energii
+pochodzi z właściwego cennika ofertowego TAURON, a nie z taryfy sprzedawcy z
+urzędu w arkuszu URE.
 
 ## Instalacja w Home Assistant
 
@@ -164,9 +166,69 @@ Publikacja nowszej oferty dla nowych umów nie zmienia automatycznie ceny już
 zawartej umowy, dlatego źródło automatyczne wybieraj tylko wtedy, gdy nazwa i
 stawki aktualnej oferty odpowiadają Twojemu cennikowi.
 
+### TAURON G14dynamic
+
+G14dynamic ma jedną cenę sprzedażową energii oraz cztery stawki zmiennej
+dystrybucji. PEP pobiera cenę sprzedażową z oficjalnego cennika
+[Prąd ze zmienną dystrybucją](https://www.tauron.pl/dla-domu/prad/prad-z-usluga/prad-dynamiczna-dystrybucja),
+a strefę S1, S2, S3 lub S4 ustala osobno dla każdej godziny z danych
+Energetycznego Kompasu PSE.
+
+Cena sprzedażowa obowiązująca od 1 stycznia 2026 r. wynosi 0,6175 PLN/kWh
+brutto i jest taka sama w każdej strefie. Zmienny składnik sieciowy zależy od
+strefy:
+
+| Strefa | Zalecenie Kompasu | `usage_fcst` | Netto [PLN/kWh] | Brutto [PLN/kWh] |
+|---|---|---:|---:|---:|
+| S1 | zalecane użytkowanie | 0 | 0,0224 | 0,0276 |
+| S2 | normalne użytkowanie | 1 | 0,0893 | 0,1098 |
+| S3 | zalecane oszczędzanie | 2 | 0,3881 | 0,4774 |
+| S4 | wymagane ograniczenie | 3 | 2,3756 | 2,9220 |
+
+PEP czyta raport `pdgsz` z endpointu
+`https://api.raporty.pse.pl/api/pdgsz`. Do obliczeń przyjmuje tylko rekordy z
+`is_active=true`, godzinę identyfikuje przez `dtime_utc`, a pole `usage_fcst`
+mapuje na strefy według tabeli powyżej.
+
+Dane PSE są sprawdzane co 15 minut, ponieważ aktywna wersja stref może zmienić
+się w ciągu doby. Jeżeli Kompas nie zawiera danej godziny, sensor nie zgaduje
+strefy i pozostaje niedostępny. Prognoza zawiera tylko ciągły zakres godzin,
+dla których PSE opublikowało strefy. Własny cennik wymaga podania jednej ceny
+sprzedażowej brutto, którą PEP stosuje we wszystkich czterech strefach.
+
 Dla ENEA G12 sprawdź godziny na umowie albo liczniku. Taryfa określa liczbę
 godzin, ale konkretne przedziały ustala operator; domyślne `6-13,15-22` można
 zmienić podczas konfiguracji albo później w opcjach integracji.
+
+## Prognoza godzinowa
+
+Główny sensor `Cena energii brutto` zachowuje bieżącą cenę w stanie. W jego
+atrybutach znajduje się prognoza 48 kolejnych godzin absolutnych:
+
+- `provider`: stała wartość `polish_energy_price`;
+- `tariff_id`: stabilny identyfikator, na przykład `tauron:g13`;
+- `operator_id`, `tariff_code` i `tariff_name`: identyfikator operatora, kod
+  taryfy oraz jej nazwa do prezentacji;
+- `currency` i `unit`: odpowiednio `PLN` oraz `PLN/kWh`;
+- `forecast`: lista slotów godzinowych;
+- `forecast_generated_at`: czas obliczenia;
+- `forecast_resolution_min`: zawsze `60`;
+- `forecast_complete`: informacja, czy dostępny jest cały żądany horyzont;
+- `forecast_source_status`: stan źródła użytego do obliczeń;
+- `forecast_valid_from`: początek ważności użytego zestawu stawek;
+- `forecast_valid_until`: koniec ważności użytego zestawu stawek.
+
+Każdy slot podaje początek, koniec, strefę taryfową oraz koszt brutto. Zawiera
+też istniejące składniki energii i dystrybucji. Prognoza nie obejmuje opłat
+stałych ani miesięcznych.
+
+Sloty są wyznaczane po osi UTC i serializowane w `Europe/Warsaw`. Wiosenna
+zmiana czasu nie tworzy nieistniejącej godziny, a podczas jesiennej zmiany oba
+wystąpienia 02:00 mają różne offsety.
+
+Jeżeli taryfa wygasa przed końcem 48 godzin, sensor zwraca tylko poprawny
+prefiks i ustawia `forecast_complete: false`. Nie wpływa to na dostępność
+bieżącej ceny, dopóki aktualna godzina mieści się w okresie ważności.
 
 ## Panel Energia
 
@@ -316,9 +378,11 @@ zużycia.
 
 Automatyzacja rozdziela źródła zgodnie z tym, kto ustala daną opłatę:
 
-- cena energii czynnej — najnowszy arkusz XLSX dla gospodarstw domowych na
-  stronie URE „Masz wybór”; dla automatycznego wariantu G13s — tabela cen
-  najnowszej oferty na oficjalnej stronie TAURON;
+- cena energii czynnej: najnowszy arkusz XLSX dla gospodarstw domowych na
+  stronie URE „Masz wybór”; dla G13s i G14dynamic właściwy oficjalny cennik
+  ofertowy TAURON;
+- strefy G14dynamic: raport `pdgsz` z oficjalnego API PSE, z uwzględnieniem
+  wyłącznie aktywnej wersji danych;
 - składnik zmienny sieciowy i stawka jakościowa — aktualna taryfa lub wyciąg
   opublikowany przez właściwego OSD; dla ENEA i ENERGA używany jest również
   oficjalny serwis dokumentów ENERGA, a dla PGE jego dokument operatora;
@@ -351,6 +415,7 @@ python3 -m unittest discover -s tests -v
 python3 -m compileall -q custom_components service tests
 ```
 
-Sprawdzane jest m.in. pokrycie każdej godziny 2026 r. dla wszystkich 20 taryf,
-zmiany sezonowe, weekendy, święta (w tym Wigilia), własne godziny ENEA G12 oraz
-licznik pracujący stale według czasu zimowego.
+Sprawdzane jest m.in. pokrycie każdej godziny 2026 r. dla 20 taryf ze stałym
+harmonogramem, mapowanie G14dynamic z danych PSE, zmiany sezonowe, weekendy,
+święta (w tym Wigilia), własne godziny ENEA G12 oraz licznik pracujący stale
+według czasu zimowego.

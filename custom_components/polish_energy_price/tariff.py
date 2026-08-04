@@ -46,6 +46,10 @@ ZONE_LABELS: dict[str, str] = {
     "szczyt_przedpoludniowy": "szczyt przedpołudniowy",
     "szczyt_popoludniowy": "szczyt popołudniowy",
     "pozostale": "pozostałe godziny",
+    "S1_zalecane_uzytkowanie": "S1: zalecane użytkowanie",
+    "S2_normalne": "S2: normalne użytkowanie",
+    "S3_zalecane_oszczedzanie": "S3: zalecane oszczędzanie",
+    "S4_wymagane_ograniczenie": "S4: wymagane ograniczenie",
 }
 
 G13S_PERIODS = (
@@ -103,6 +107,7 @@ class TariffDefinition:
     off_peak_days: str = "weekend_holiday"
     description: str = ""
     external_statistics_supported: bool = True
+    dynamic_zone_source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +209,7 @@ def _tariff(
     off_peak_days: str = "weekend_holiday",
     description: str = "",
     external_statistics_supported: bool = True,
+    dynamic_zone_source: str | None = None,
 ) -> TariffDefinition:
     return TariffDefinition(
         operator,
@@ -216,6 +222,7 @@ def _tariff(
         off_peak_days,
         description,
         external_statistics_supported,
+        dynamic_zone_source,
     )
 
 
@@ -304,6 +311,32 @@ TARIFFS: dict[tuple[str, str], TariffDefinition] = {
             "lato_dzien_wolny_nocna": 0.6212,
         },
         description="wielostrefowa sezonowa Tanie Godziny",
+    ),
+    ("tauron", "G14dynamic"): _tariff(
+        "tauron",
+        "G14dynamic",
+        (
+            "S1_zalecane_uzytkowanie",
+            "S2_normalne",
+            "S3_zalecane_oszczedzanie",
+            "S4_wymagane_ograniczenie",
+        ),
+        (),
+        {
+            "S1_zalecane_uzytkowanie": 0.0224,
+            "S2_normalne": 0.0893,
+            "S3_zalecane_oszczedzanie": 0.3881,
+            "S4_wymagane_ograniczenie": 2.3756,
+        },
+        {
+            "S1_zalecane_uzytkowanie": 0.6175,
+            "S2_normalne": 0.6175,
+            "S3_zalecane_oszczedzanie": 0.6175,
+            "S4_wymagane_ograniczenie": 0.6175,
+        },
+        description="czterostrefowa według Energetycznego Kompasu PSE",
+        external_statistics_supported=False,
+        dynamic_zone_source="pse_pdgsz",
     ),
     ("pge", "G11"): _tariff(
         "pge",
@@ -582,10 +615,18 @@ def zone_at(
     *,
     day_hours: str | None = None,
     fixed_winter_time: bool = False,
+    dynamic_zones: Mapping[str, str] | None = None,
 ) -> str:
     """Resolve the billing zone active at an aware timestamp."""
 
     local = _billing_time(ts, fixed_winter_time)
+    if tariff.dynamic_zone_source:
+        zone = (dynamic_zones or {}).get(dynamic_hour_key(ts))
+        if zone not in tariff.zones:
+            raise DynamicZoneUnavailable(
+                f"Brak strefy Energetycznego Kompasu dla {local.isoformat()}"
+            )
+        return zone
     if tariff.operator == "tauron" and tariff.group.lower() == "g13s":
         season_name = "lato" if 4 <= local.month <= 9 else "zima"
         day_name = (
@@ -626,6 +667,7 @@ def price_at(
     system_net: float | None = None,
     day_hours: str | None = None,
     fixed_winter_time: bool = False,
+    dynamic_zones: Mapping[str, str] | None = None,
 ) -> PriceBreakdown:
     """Calculate the gross marginal price of one kWh at ``ts``."""
 
@@ -634,6 +676,7 @@ def price_at(
         ts,
         day_hours=day_hours,
         fixed_winter_time=fixed_winter_time,
+        dynamic_zones=dynamic_zones,
     )
     return price_for_zone(
         tariff,
@@ -677,3 +720,17 @@ def price_for_zone(
         distribution=distribution,
         total=round(energy + distribution, 4),
     )
+
+
+class DynamicZoneUnavailable(ValueError):
+    """The external source has no reliable zone for the requested hour."""
+
+
+def dynamic_hour_key(ts: datetime) -> str:
+    """Return a stable UTC key for one absolute billing hour."""
+
+    if ts.tzinfo is None or ts.utcoffset() is None:
+        raise ValueError("Czas strefy dynamicznej musi zawierać strefę czasową")
+    return ts.astimezone(ZoneInfo("UTC")).replace(
+        minute=0, second=0, microsecond=0
+    ).isoformat()

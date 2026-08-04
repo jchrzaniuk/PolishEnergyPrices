@@ -19,6 +19,7 @@ CONF_EXTERNAL_STATISTIC_PREFIX = "external_statistic_"
 PRICE_SOURCE_REGULATED = "regulated"
 PRICE_SOURCE_CUSTOM = "custom"
 PRICE_SOURCE_TAURON_G13S = "tauron_g13s"
+PRICE_SOURCE_TAURON_G14DYNAMIC = "tauron_g14dynamic"
 
 METER_CLOCK_LOCAL = "local_time"
 METER_CLOCK_FIXED_WINTER = "fixed_winter_time"

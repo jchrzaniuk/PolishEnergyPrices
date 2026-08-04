@@ -21,6 +21,10 @@ from pypdf.errors import PdfReadError
 OZE_RATES_PAGE = "https://bip.ure.gov.pl/bip/odnawialne-zrodla-energ/stawki-oplaty-oze"
 ELI_API = "https://api.sejm.gov.pl/eli"
 TAURON_G13S_PAGE = "https://www.tauron.pl/dla-domu/prad/prad-z-usluga/tanie-godziny"
+TAURON_G14DYNAMIC_PRICE_LIST = (
+    "https://www.tauron.pl/-/media/offer-documents/produkty/g14dynamic/ts/"
+    "cennik/ee-gd-bsc-b-dynd-ts-0.ashx"
+)
 
 OPERATOR_PAGES: dict[str, str] = {
     "tauron": (
@@ -144,6 +148,31 @@ def parse_tauron_g13s_prices(script: str) -> dict[str, float]:
         result[f"{period}_dzienna_szczytowa"] = values[0]
         result[f"{period}_nocna"] = values[3]
     return result
+
+
+def parse_tauron_g14dynamic_prices(content: bytes) -> dict[str, float]:
+    """Read the single-zone gross energy price from the official offer PDF."""
+
+    text = extract_pdf_text(content)
+    gross = re.search(r"\(brutto\)", text, re.IGNORECASE)
+    if not gross:
+        raise ValueError("Cennik G14dynamic nie zawiera tabeli cen brutto")
+    block = text[gross.end() : gross.end() + 6000]
+    values = [
+        float(value.replace(",", "."))
+        for value in re.findall(r"(?<![\d.])\d+[,.]\d{4}(?!\d)", block)
+    ]
+    if len(values) < 4 or len(set(values[:4])) != 1:
+        raise ValueError("Cennik G14dynamic nie zawiera jednej ceny dla czterech stref")
+    price = round(values[0], 4)
+    if not 0 < price < 10:
+        raise ValueError("Cena energii G14dynamic jest poza bezpiecznym zakresem")
+    return {
+        "S1_zalecane_uzytkowanie": price,
+        "S2_normalne": price,
+        "S3_zalecane_oszczedzanie": price,
+        "S4_wymagane_ograniczenie": price,
+    }
 
 
 def discover_distribution_document(
@@ -308,7 +337,7 @@ def _decimal_values(text: str) -> list[float]:
 
 
 def _validate_distribution(values: list[float], zones: int) -> list[float]:
-    if len(values) != zones or any(not 0.001 <= value <= 1.5 for value in values):
+    if len(values) != zones or any(not 0.001 <= value <= 5 for value in values):
         raise ValueError("Niepełny lub niewiarygodny zestaw stawek sieciowych")
     return [round(value, 6) for value in values]
 
@@ -358,6 +387,23 @@ def _tauron_g13s_rates(text: str, zone_keys: tuple[str, ...]) -> dict[str, float
     if set(result) != set(zone_keys):
         raise ValueError("Niepełny zestaw stref dystrybucyjnych G13s")
     return {zone: result[zone] for zone in zone_keys}
+
+
+def _tauron_g14dynamic_rates(
+    text: str, zone_keys: tuple[str, ...]
+) -> dict[str, float]:
+    """Read the four Kompas-dependent network rates from the TAURON row."""
+
+    for match in re.finditer(r"G14dynamic", text, re.IGNORECASE):
+        values = _four_decimal_values(text[match.end() : match.end() + 2500])[:4]
+        if (
+            len(values) == 4
+            and values[0] < values[1] < values[2] < values[3]
+            and values[3] > 1
+        ):
+            validated = _validate_distribution(values, 4)
+            return dict(zip(zone_keys, validated, strict=True))
+    raise ValueError("Nie znaleziono kompletnego wiersza G14dynamic")
 
 
 def _enea_rates(text: str, group: str, zones: int) -> list[float]:
@@ -449,6 +495,8 @@ def parse_distribution_pdf(
     zones = len(zone_keys)
     if operator == "tauron" and group.lower() == "g13s":
         return _tauron_g13s_rates(text, zone_keys)
+    if operator == "tauron" and group.lower() == "g14dynamic":
+        return _tauron_g14dynamic_rates(text, zone_keys)
     if operator in ("tauron", "energa"):
         values = _row_rates(text, group, zones)
     elif operator == "enea":

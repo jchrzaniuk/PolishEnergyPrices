@@ -26,10 +26,10 @@ potrzebuje dostępu do Home Assistanta ani openHAB.
    ghcr.io/jchrzaniuk/polish-energy-prices:latest
    ```
 
-   Aby przypiąć konfigurację do wydania 1.5.0, ustaw w `compose.yaml`:
+   Aby przypiąć konfigurację do wydania 1.6.0, ustaw w `compose.yaml`:
 
    ```text
-   ghcr.io/jchrzaniuk/polish-energy-prices:v1.5.0
+   ghcr.io/jchrzaniuk/polish-energy-prices:v1.6.0
    ```
 
 4. Sprawdź odpowiedź:
@@ -62,7 +62,12 @@ Obsługiwane źródła ceny energii:
 
 - `regulated`: automatyczna cena sprzedawcy z urzędu z arkusza URE;
 - `tauron_g13s`: automatyczna cena aktualnej oferty G13s TAURON;
+- `tauron_g14dynamic`: automatyczna cena oferty G14dynamic TAURON oraz strefy
+  z Energetycznego Kompasu PSE;
 - `custom`: ceny brutto wpisane w `custom_prices`.
+
+Jeżeli co najmniej jeden profil korzysta z G14dynamic, usługa odświeża źródła
+co 15 minut. Dokumenty z rocznymi stawkami nadal sprawdza co 12 godzin.
 
 Dla starszego licznika pracującego przez cały rok według czasu zimowego ustaw
 `meter_clock: fixed_winter_time`. ENEA G12 może dodatkowo używać własnych
@@ -75,7 +80,16 @@ przedziałów, np. `day_hours: "6-13,15-22"`.
 | `/health` | stan procesu i liczba profili |
 | `/api/price` | ceny wszystkich profili |
 | `/api/price/<profil>` | pełna cena i składniki jednego profilu |
+| `/api/forecast` | prognozy wszystkich profili |
+| `/api/forecast/<profil>` | prognoza jednego profilu |
+| `/api/forecast/<profil>?hours=24` | prognoza o długości od 1 do 168 godzin |
 | `/api/status` | stan źródeł i ostatnie błędy |
+
+Endpoint prognozy nie odświeża źródeł. Korzysta ze spójnego snapshotu danych
+wyliczonego po starcie, po zmianie godziny i po planowym odświeżeniu. Odpowiedź
+zawiera stabilne metadane `provider`, `tariff_id`, `operator_id`,
+`tariff_code`, `tariff_name` i `unit`. Pole `complete` ma wartość `false`,
+jeżeli okres ważności stawek kończy się przed końcem żądanego horyzontu.
 
 ## MQTT
 
@@ -86,6 +100,7 @@ powstają między innymi:
 polish_energy_prices/availability
 polish_energy_prices/dom/availability
 polish_energy_prices/dom/state
+polish_energy_prices/dom/forecast
 polish_energy_prices/dom/price_gross
 polish_energy_prices/dom/energy_gross
 polish_energy_prices/dom/distribution_gross
@@ -93,9 +108,14 @@ polish_energy_prices/dom/zone
 polish_energy_prices/dom/source_status
 ```
 
-Temat `state` zawiera cały obiekt JSON. Pozostałe tematy mają pojedyncze
-wartości wygodne dla kanałów openHAB. Usługa publikuje ceny po uruchomieniu, po
-każdym odświeżeniu źródeł i po zmianie godziny.
+Temat `state` zawiera bieżący obiekt JSON. Temat `forecast` zawiera retained
+prognozę 48 godzin. Pozostałe tematy mają pojedyncze wartości wygodne dla
+kanałów openHAB. Usługa publikuje ceny i prognozę po uruchomieniu, po każdym
+odświeżeniu źródeł i po zmianie godziny.
+
+Jeżeli dane wygasną, `forecast` zostaje zastąpiony obiektem z pustą listą
+slotów, `complete: false` i `source_status: expired`. Broker nie zachowuje w ten
+sposób starej prognozy jako aktualnej.
 
 Globalny temat `polish_energy_prices/availability` jest komunikatem LWT procesu.
 Temat `<profil>/availability` informuje osobno, czy taryfa profilu jest nadal

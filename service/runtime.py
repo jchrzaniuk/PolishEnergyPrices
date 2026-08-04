@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -14,12 +14,22 @@ from pathlib import Path
 import ssl
 from threading import Lock, Thread
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
 from paho.mqtt import client as mqtt
 
+from custom_components.polish_energy_price.forecast import (
+    DEFAULT_FORECAST_HOURS,
+    MAX_FORECAST_HOURS,
+    PriceForecast,
+    build_forecast,
+    forecast_to_dict,
+    resize_forecast,
+)
 from custom_components.polish_energy_price.source_engine import EnergyPriceSourceEngine
 from custom_components.polish_energy_price.tariff import (
+    DynamicZoneUnavailable,
     EXCISE_NET_PLN_KWH,
     VAT,
     WARSAW,
@@ -112,15 +122,37 @@ class ProfileRuntime:
             if self.config.price_source == "custom"
             else self.data.prices
         )
-        result = price_at(
-            self.engine.tariff,
-            now,
-            custom_energy=custom,
-            distribution_net=self.data.distribution_net,
-            system_net=self.data.system_total,
-            day_hours=self.config.day_hours,
-            fixed_winter_time=self.config.meter_clock == "fixed_winter_time",
-        )
+        try:
+            result = price_at(
+                self.engine.tariff,
+                now,
+                custom_energy=custom,
+                distribution_net=self.data.distribution_net,
+                system_net=self.data.system_total,
+                day_hours=self.config.day_hours,
+                fixed_winter_time=self.config.meter_clock == "fixed_winter_time",
+                dynamic_zones=self.data.dynamic_zones,
+            )
+        except DynamicZoneUnavailable as err:
+            return {
+                "available": False,
+                "price_gross": None,
+                "unit": "PLN/kWh",
+                "operator": self.config.operator,
+                "tariff": self.engine.tariff.group,
+                "source_status": "dynamic_zone_unavailable",
+                "last_calculated": now.isoformat(),
+                "errors": {
+                    "energy": self.data.error,
+                    "official": self.data.official_error,
+                    "dynamic": self.data.dynamic_error or str(err),
+                },
+                "sources": {
+                    "energy": self.data.source_url,
+                    "distribution": self.data.distribution_source_url,
+                    "dynamic_zones": self.data.dynamic_source_url,
+                },
+            }
         system_rates = self.data.system_net or {}
         network_net = float(
             (self.data.distribution_net or self.engine.tariff.distribution_net)[
@@ -136,7 +168,12 @@ class ProfileRuntime:
         valid = self.data.is_valid_on(now.date())
         source = "custom" if self.config.price_source == "custom" else self.data.source
         source_status = "current"
-        if source.endswith("_cache") or self.data.error or self.data.official_error:
+        if (
+            source.endswith("_cache")
+            or self.data.error
+            or self.data.official_error
+            or self.data.dynamic_error
+        ):
             source_status = "cache_or_warning"
         if not valid:
             source_status = "expired"
@@ -170,6 +207,7 @@ class ProfileRuntime:
             "errors": {
                 "energy": self.data.error,
                 "official": self.data.official_error,
+                "dynamic": self.data.dynamic_error,
             },
             "sources": {
                 "energy": self.data.source_url,
@@ -177,8 +215,29 @@ class ProfileRuntime:
                 "quality": self.data.system_source_url,
                 "oze": self.data.oze_source_url,
                 "cogeneration": self.data.cogeneration_source_url,
+                "dynamic_zones": self.data.dynamic_source_url,
             },
         }
+
+    def forecast(
+        self, now: datetime, hours: int = DEFAULT_FORECAST_HOURS
+    ) -> PriceForecast:
+        """Build a forecast without refreshing any external source."""
+
+        custom = (
+            self.config.custom_prices
+            if self.config.price_source == "custom"
+            else None
+        )
+        return build_forecast(
+            self.engine.tariff,
+            self.data,
+            now,
+            custom_energy=custom,
+            day_hours=self.config.day_hours,
+            fixed_winter_time=self.config.meter_clock == "fixed_winter_time",
+            hours=hours,
+        )
 
 
 class MqttPublisher:
@@ -188,9 +247,11 @@ class MqttPublisher:
         self,
         config: MqttConfig,
         snapshots: Callable[[], dict[str, dict[str, Any]]],
+        forecasts: Callable[[], dict[str, PriceForecast]],
     ) -> None:
         self.config = config
         self._snapshots = snapshots
+        self._forecasts = forecasts
         self._connected = False
         self._client: mqtt.Client | None = None
 
@@ -246,15 +307,27 @@ class MqttPublisher:
     def publish_all(self) -> None:
         if not self._connected:
             return
+        forecasts = self._forecasts()
         for profile_id, snapshot in self._snapshots().items():
-            self.publish(profile_id, snapshot)
+            self.publish(profile_id, snapshot, forecasts.get(profile_id))
 
-    def publish(self, profile_id: str, snapshot: dict[str, Any]) -> None:
+    def publish(
+        self,
+        profile_id: str,
+        snapshot: dict[str, Any],
+        forecast: PriceForecast | None = None,
+    ) -> None:
         client = self._client
         if client is None or not self._connected:
             return
         base = f"{self.config.topic_prefix}/{profile_id}"
         self._publish(f"{base}/state", json.dumps(snapshot, ensure_ascii=False))
+        if forecast is not None:
+            self._publish(
+                f"{base}/forecast",
+                json.dumps(forecast_to_dict(forecast), ensure_ascii=False),
+                retain=True,
+            )
         scalar_keys = (
             "price_gross",
             "energy_gross",
@@ -280,13 +353,15 @@ class MqttPublisher:
             "online" if snapshot.get("available") else "offline",
         )
 
-    def _publish(self, topic: str, payload: str) -> None:
+    def _publish(
+        self, topic: str, payload: str, *, retain: bool | None = None
+    ) -> None:
         assert self._client is not None
         self._client.publish(
             topic,
             payload,
             qos=self.config.qos,
-            retain=self.config.retain,
+            retain=self.config.retain if retain is None else retain,
         )
 
     def _on_connect(
@@ -335,10 +410,11 @@ class PriceService:
         self.fetcher = HttpFetcher()
         self._snapshot_lock = Lock()
         self._snapshots: dict[str, dict[str, Any]] = {}
+        self._forecasts: dict[str, PriceForecast] = {}
         self._stop = asyncio.Event()
         self._http: ThreadingHTTPServer | None = None
         self._http_thread: Thread | None = None
-        self.mqtt = MqttPublisher(config.mqtt, self.snapshots)
+        self.mqtt = MqttPublisher(config.mqtt, self.snapshots, self.forecasts)
 
     async def run(self) -> None:
         for profile in self.profiles.values():
@@ -350,6 +426,11 @@ class PriceService:
             await self.refresh_all()
 
             refresh_seconds = self.config.refresh_interval_hours * 3600
+            if any(
+                profile.engine.tariff.dynamic_zone_source
+                for profile in self.profiles.values()
+            ):
+                refresh_seconds = min(refresh_seconds, 15 * 60)
             next_refresh = asyncio.get_running_loop().time() + refresh_seconds
             last_hour = _hour_key(datetime.now(WARSAW))
             while not self._stop.is_set():
@@ -388,12 +469,28 @@ class PriceService:
             profile_id: profile.snapshot(calculated_at)
             for profile_id, profile in self.profiles.items()
         }
+        forecasts = {
+            profile_id: profile.forecast(calculated_at, MAX_FORECAST_HOURS)
+            for profile_id, profile in self.profiles.items()
+        }
         with self._snapshot_lock:
             self._snapshots = snapshots
+            self._forecasts = forecasts
 
     def snapshots(self) -> dict[str, dict[str, Any]]:
         with self._snapshot_lock:
             return deepcopy(self._snapshots)
+
+    def forecasts(
+        self, hours: int = DEFAULT_FORECAST_HOURS
+    ) -> dict[str, PriceForecast]:
+        """Return one coherent, immutable view of all profile forecasts."""
+
+        with self._snapshot_lock:
+            return {
+                profile_id: resize_forecast(forecast, hours)
+                for profile_id, forecast in self._forecasts.items()
+            }
 
     def _start_http(self) -> None:
         handler = _handler_for(self)
@@ -422,7 +519,8 @@ class PriceService:
 def _handler_for(service: PriceService) -> type[BaseHTTPRequestHandler]:
     class PriceRequestHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-            path = self.path.split("?", 1)[0].rstrip("/") or "/"
+            parsed = urlsplit(self.path)
+            path = parsed.path.rstrip("/") or "/"
             snapshots = service.snapshots()
             if path == "/health":
                 self._json(
@@ -448,6 +546,37 @@ def _handler_for(service: PriceService) -> type[BaseHTTPRequestHandler]:
                         }
                     },
                 )
+                return
+            forecast_prefix = "/api/forecast/"
+            if path == "/api/forecast" or path.startswith(forecast_prefix):
+                try:
+                    hours = _forecast_hours(parsed.query)
+                except ValueError as err:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(err)})
+                    return
+                forecasts = service.forecasts(hours)
+                if path == "/api/forecast":
+                    self._json(
+                        HTTPStatus.OK,
+                        {
+                            "profiles": {
+                                key: forecast_to_dict(value)
+                                for key, value in forecasts.items()
+                            }
+                        },
+                    )
+                    return
+                profile_id = path[len(forecast_prefix) :]
+                if profile_id in forecasts:
+                    self._json(
+                        HTTPStatus.OK,
+                        forecast_to_dict(forecasts[profile_id]),
+                    )
+                else:
+                    self._json(
+                        HTTPStatus.NOT_FOUND,
+                        {"error": "Nie znaleziono profilu"},
+                    )
                 return
             prefix = "/api/price/"
             if path.startswith(prefix):
@@ -481,4 +610,26 @@ async def _run_sync(function: Callable[..., Any], *args: Any) -> Any:
 
 
 def _hour_key(value: datetime) -> tuple[int, int, int, int]:
-    return value.year, value.month, value.day, value.hour
+    absolute = value.astimezone(timezone.utc)
+    return absolute.year, absolute.month, absolute.day, absolute.hour
+
+
+def _forecast_hours(query: str) -> int:
+    params = parse_qs(query, keep_blank_values=True)
+    unknown = set(params) - {"hours"}
+    if unknown:
+        raise ValueError("Nieznany parametr zapytania")
+    values = params.get("hours")
+    if values is None:
+        return DEFAULT_FORECAST_HOURS
+    if len(values) != 1:
+        raise ValueError("Parametr hours może wystąpić tylko raz")
+    try:
+        hours = int(values[0])
+    except ValueError as err:
+        raise ValueError("Parametr hours musi być liczbą całkowitą") from err
+    if not 1 <= hours <= MAX_FORECAST_HOURS:
+        raise ValueError(
+            f"Parametr hours musi mieścić się w zakresie 1-{MAX_FORECAST_HOURS}"
+        )
+    return hours

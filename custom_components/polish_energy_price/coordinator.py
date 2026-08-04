@@ -30,9 +30,10 @@ from .source_engine import (
 _LOGGER = logging.getLogger(__name__)
 
 UPDATE_INTERVAL = timedelta(hours=12)
+DYNAMIC_UPDATE_INTERVAL = timedelta(minutes=15)
 REQUEST_TIMEOUT = ClientTimeout(total=45)
 STORAGE_VERSION = 1
-REQUEST_HEADERS = {"User-Agent": "Home Assistant PolishEnergyPrices/1.5.0"}
+REQUEST_HEADERS = {"User-Agent": "Home Assistant PolishEnergyPrices/1.6.0"}
 
 
 class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
@@ -56,7 +57,11 @@ class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
             _LOGGER,
             name=f"{DOMAIN}_{entry.entry_id}",
             config_entry=entry,
-            update_interval=UPDATE_INTERVAL,
+            update_interval=(
+                DYNAMIC_UPDATE_INTERVAL
+                if self.tariff.dynamic_zone_source
+                else UPDATE_INTERVAL
+            ),
         )
         self.data = self.engine.initial_data()
 

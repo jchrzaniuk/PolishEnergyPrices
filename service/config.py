@@ -137,17 +137,36 @@ def _profile_config(profile_id: str, raw: object) -> ProfileConfig:
     source_default = (
         "tauron_g13s"
         if operator == "tauron" and group.lower() == "g13s"
-        else "regulated"
+        else (
+            "tauron_g14dynamic"
+            if operator == "tauron" and group.lower() == "g14dynamic"
+            else "regulated"
+        )
     )
     price_source = str(values.get("price_source", source_default))
-    if price_source not in {"regulated", "tauron_g13s", "custom"}:
+    if price_source not in {
+        "regulated",
+        "tauron_g13s",
+        "tauron_g14dynamic",
+        "custom",
+    }:
         raise ValueError(f"Profil {profile_id} ma nieznane price_source")
     if price_source == "tauron_g13s" and not (
         operator == "tauron" and group.lower() == "g13s"
     ):
         raise ValueError("Źródło tauron_g13s działa tylko dla TAURON G13s")
+    if price_source == "tauron_g14dynamic" and not (
+        operator == "tauron" and group.lower() == "g14dynamic"
+    ):
+        raise ValueError(
+            "Źródło tauron_g14dynamic działa tylko dla TAURON G14dynamic"
+        )
     if price_source == "regulated" and group.lower() == "g13s":
         raise ValueError("G13s nie występuje w arkuszu sprzedawców z urzędu URE")
+    if price_source == "regulated" and group.lower() == "g14dynamic":
+        raise ValueError(
+            "G14dynamic wymaga cennika Prąd ze zmienną dystrybucją TAURON"
+        )
 
     meter_clock = str(values.get("meter_clock", "local_time"))
     if meter_clock not in {"local_time", "fixed_winter_time"}:
