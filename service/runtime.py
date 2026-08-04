@@ -430,7 +430,7 @@ class PriceService:
                 profile.engine.tariff.dynamic_zone_source
                 for profile in self.profiles.values()
             ):
-                refresh_seconds = min(refresh_seconds, 15 * 60)
+                refresh_seconds = min(refresh_seconds, 60 * 60)
             next_refresh = asyncio.get_running_loop().time() + refresh_seconds
             last_hour = _hour_key(datetime.now(WARSAW))
             while not self._stop.is_set():

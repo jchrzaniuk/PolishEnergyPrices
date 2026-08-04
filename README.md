@@ -32,7 +32,7 @@ logowania do GHCR:
 
 ```text
 ghcr.io/jchrzaniuk/polish-energy-prices:latest
-ghcr.io/jchrzaniuk/polish-energy-prices:v1.6.0
+ghcr.io/jchrzaniuk/polish-energy-prices:v1.6.1
 ```
 
 ### Uruchomienie gotowego obrazu
@@ -168,33 +168,15 @@ stawki aktualnej oferty odpowiadają Twojemu cennikowi.
 
 ### TAURON G14dynamic
 
-G14dynamic ma jedną cenę sprzedażową energii oraz cztery stawki zmiennej
-dystrybucji. PEP pobiera cenę sprzedażową z oficjalnego cennika
+Integracja obsługuje taryfę G14dynamic TAURON. Cenę energii pobiera z
+oficjalnego cennika
 [Prąd ze zmienną dystrybucją](https://www.tauron.pl/dla-domu/prad/prad-z-usluga/prad-dynamiczna-dystrybucja),
-a strefę S1, S2, S3 lub S4 ustala osobno dla każdej godziny z danych
-Energetycznego Kompasu PSE.
+a harmonogram stref z Energetycznego Kompasu PSE.
 
-Cena sprzedażowa obowiązująca od 1 stycznia 2026 r. wynosi 0,6175 PLN/kWh
-brutto i jest taka sama w każdej strefie. Zmienny składnik sieciowy zależy od
-strefy:
-
-| Strefa | Zalecenie Kompasu | `usage_fcst` | Netto [PLN/kWh] | Brutto [PLN/kWh] |
-|---|---|---:|---:|---:|
-| S1 | zalecane użytkowanie | 0 | 0,0224 | 0,0276 |
-| S2 | normalne użytkowanie | 1 | 0,0893 | 0,1098 |
-| S3 | zalecane oszczędzanie | 2 | 0,3881 | 0,4774 |
-| S4 | wymagane ograniczenie | 3 | 2,3756 | 2,9220 |
-
-PEP czyta raport `pdgsz` z endpointu
-`https://api.raporty.pse.pl/api/pdgsz`. Do obliczeń przyjmuje tylko rekordy z
-`is_active=true`, godzinę identyfikuje przez `dtime_utc`, a pole `usage_fcst`
-mapuje na strefy według tabeli powyżej.
-
-Dane PSE są sprawdzane co 15 minut, ponieważ aktywna wersja stref może zmienić
-się w ciągu doby. Jeżeli Kompas nie zawiera danej godziny, sensor nie zgaduje
-strefy i pozostaje niedostępny. Prognoza zawiera tylko ciągły zakres godzin,
-dla których PSE opublikowało strefy. Własny cennik wymaga podania jednej ceny
-sprzedażowej brutto, którą PEP stosuje we wszystkich czterech strefach.
+Harmonogram jest publikowany raz na dobę. Integracja pobiera go automatycznie
+i zachowuje na potrzeby bieżącej ceny oraz prognozy. Jeżeli dane na kolejną
+dobę nie są jeszcze dostępne, sprawdzenie jest ponawiane co godzinę. Własny
+cennik wymaga podania jednej ceny sprzedażowej brutto.
 
 Dla ENEA G12 sprawdź godziny na umowie albo liczniku. Taryfa określa liczbę
 godzin, ale konkretne przedziały ustala operator; domyślne `6-13,15-22` można
@@ -381,8 +363,7 @@ Automatyzacja rozdziela źródła zgodnie z tym, kto ustala daną opłatę:
 - cena energii czynnej: najnowszy arkusz XLSX dla gospodarstw domowych na
   stronie URE „Masz wybór”; dla G13s i G14dynamic właściwy oficjalny cennik
   ofertowy TAURON;
-- strefy G14dynamic: raport `pdgsz` z oficjalnego API PSE, z uwzględnieniem
-  wyłącznie aktywnej wersji danych;
+- strefy G14dynamic: Energetyczny Kompas PSE;
 - składnik zmienny sieciowy i stawka jakościowa — aktualna taryfa lub wyciąg
   opublikowany przez właściwego OSD; dla ENEA i ENERGA używany jest również
   oficjalny serwis dokumentów ENERGA, a dla PGE jego dokument operatora;

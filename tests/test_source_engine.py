@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import json
 import unittest
 
 from custom_components.polish_energy_price.source_engine import (
@@ -50,6 +51,86 @@ class SourceEngineTests(unittest.TestCase):
         self.assertEqual("bundled", refreshed.source)
         self.assertIn("brak odpowiedzi", refreshed.error or "")
         self.assertIn("brak odpowiedzi", refreshed.official_error or "")
+
+    def test_dynamic_days_are_fetched_once_after_publication(self) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G14dynamic", "tauron_g14dynamic"
+        )
+        current = engine.initial_data()
+        now = datetime(2026, 8, 4, 12, tzinfo=WARSAW)
+        responses = [
+            self._kompas_payload("2026-08-04 10:00", 1),
+            self._kompas_payload("2026-08-05 10:00", 2),
+        ]
+        calls = 0
+
+        async def fetch(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            return responses[calls - 1]
+
+        first = asyncio.run(
+            engine._refresh_dynamic(current, now.isoformat(), fetch, now)
+        )
+        second = asyncio.run(
+            engine._refresh_dynamic(
+                first,
+                datetime(2026, 8, 4, 13, tzinfo=WARSAW).isoformat(),
+                fetch,
+                datetime(2026, 8, 4, 13, tzinfo=WARSAW),
+            )
+        )
+
+        self.assertEqual(2, calls)
+        self.assertEqual(first.dynamic_zones, second.dynamic_zones)
+
+    def test_dynamic_day_is_retried_until_it_is_published(self) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G14dynamic", "tauron_g14dynamic"
+        )
+        current = engine.initial_data()
+        first_now = datetime(2026, 8, 4, 12, tzinfo=WARSAW)
+        responses = [
+            self._kompas_payload("2026-08-04 10:00", 1),
+            json.dumps({"value": []}).encode(),
+            self._kompas_payload("2026-08-05 10:00", 2),
+        ]
+        calls = 0
+
+        async def fetch(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            return responses[calls - 1]
+
+        first = asyncio.run(
+            engine._refresh_dynamic(
+                current, first_now.isoformat(), fetch, first_now
+            )
+        )
+        second_now = datetime(2026, 8, 4, 13, tzinfo=WARSAW)
+        second = asyncio.run(
+            engine._refresh_dynamic(
+                first, second_now.isoformat(), fetch, second_now
+            )
+        )
+
+        self.assertEqual(3, calls)
+        self.assertEqual(2, len(second.dynamic_zones or {}))
+
+    @staticmethod
+    def _kompas_payload(utc_hour: str, level: int) -> bytes:
+        return json.dumps(
+            {
+                "value": [
+                    {
+                        "dtime_utc": utc_hour,
+                        "is_active": True,
+                        "usage_fcst": level,
+                        "publication_ts_utc": "2026-08-03 15:00:00",
+                    }
+                ]
+            }
+        ).encode()
 
 
 if __name__ == "__main__":

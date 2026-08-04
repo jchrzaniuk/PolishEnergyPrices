@@ -26,10 +26,10 @@ potrzebuje dostępu do Home Assistanta ani openHAB.
    ghcr.io/jchrzaniuk/polish-energy-prices:latest
    ```
 
-   Aby przypiąć konfigurację do wydania 1.6.0, ustaw w `compose.yaml`:
+   Aby przypiąć konfigurację do wydania 1.6.1, ustaw w `compose.yaml`:
 
    ```text
-   ghcr.io/jchrzaniuk/polish-energy-prices:v1.6.0
+   ghcr.io/jchrzaniuk/polish-energy-prices:v1.6.1
    ```
 
 4. Sprawdź odpowiedź:
@@ -66,8 +66,9 @@ Obsługiwane źródła ceny energii:
   z Energetycznego Kompasu PSE;
 - `custom`: ceny brutto wpisane w `custom_prices`.
 
-Jeżeli co najmniej jeden profil korzysta z G14dynamic, usługa odświeża źródła
-co 15 minut. Dokumenty z rocznymi stawkami nadal sprawdza co 12 godzin.
+Strefy G14dynamic są publikowane raz na dobę. Usługa zachowuje pobrany
+harmonogram i ponawia sprawdzenie co godzinę, dopóki dane na kolejną dobę nie
+będą dostępne. Dokumenty z rocznymi stawkami nadal sprawdza co 12 godzin.
 
 Dla starszego licznika pracującego przez cały rok według czasu zimowego ustaw
 `meter_clock: fixed_winter_time`. ENEA G12 może dodatkowo używać własnych

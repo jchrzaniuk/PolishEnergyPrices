@@ -427,7 +427,7 @@ class EnergyPriceSourceEngine:
         fetch_bytes: FetchBytes,
         now: datetime,
     ) -> EnergyPriceData:
-        """Refresh active PSE revisions for today and the next two days."""
+        """Fetch a published Kompas day once and retry days not yet available."""
 
         if not self.tariff.dynamic_zone_source:
             return current
@@ -435,7 +435,7 @@ class EnergyPriceSourceEngine:
         local_today = now.astimezone(WARSAW).date()
         zones = dict(current.dynamic_zones or {})
         keep_from = local_today - timedelta(days=1)
-        keep_until = local_today + timedelta(days=2)
+        keep_until = local_today + timedelta(days=1)
         zones = {
             key: zone
             for key, zone in zones.items()
@@ -444,8 +444,12 @@ class EnergyPriceSourceEngine:
         newest_publication = current.dynamic_publication_utc
         changed = False
         errors: list[str] = []
-        for offset in range(3):
+        checked_source = False
+        for offset in range(2):
             day = local_today + timedelta(days=offset)
+            if any(local_day_for_key(key) == day for key in zones):
+                continue
+            checked_source = True
             url = build_kompas_url(day)
             try:
                 snapshot = parse_kompas(
@@ -482,7 +486,9 @@ class EnergyPriceSourceEngine:
             current,
             dynamic_zones=zones,
             dynamic_source_url=KOMPAS_API_URL,
-            dynamic_last_checked=checked,
+            dynamic_last_checked=(
+                checked if checked_source else current.dynamic_last_checked
+            ),
             dynamic_last_updated=(
                 checked if changed else current.dynamic_last_updated
             ),

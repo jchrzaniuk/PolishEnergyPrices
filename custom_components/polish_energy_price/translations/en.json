@@ -23,7 +23,7 @@
       },
       "energy": {
         "title": "Wybierz źródło ceny energii",
-        "description": "Ceny sprzedawcy z urzędu są sprawdzane w arkuszu URE co 12 godzin. G13s i G14dynamic korzystają z właściwych cenników TAURON. Strefy G14dynamic są pobierane z Energetycznego Kompasu PSE co 15 minut.",
+        "description": "Ceny sprzedawcy z urzędu są sprawdzane w arkuszu URE co 12 godzin. G13s i G14dynamic korzystają z właściwych cenników TAURON. Strefy G14dynamic są pobierane automatycznie z Energetycznego Kompasu PSE.",
         "data": {
           "price_source": "Źródło ceny energii",
           "external_statistics": "Utwórz koszty dla zewnętrznych statystyk zużycia"
