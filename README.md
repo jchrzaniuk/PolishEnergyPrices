@@ -32,8 +32,12 @@ logowania do GHCR:
 
 ```text
 ghcr.io/jchrzaniuk/polish-energy-prices:latest
-ghcr.io/jchrzaniuk/polish-energy-prices:v1.6.1
+ghcr.io/jchrzaniuk/polish-energy-prices:sha-541e5ec
 ```
+
+Tag `latest` wskazuje najnowszy zbudowany obraz. Aby przypiąć konkretną
+wersję, użyj tagu `sha-` ze skrótem commita — obrazy nie są etykietowane
+numerem wydania.
 
 ### Uruchomienie gotowego obrazu
 

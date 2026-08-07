@@ -26,10 +26,19 @@ potrzebuje dostępu do Home Assistanta ani openHAB.
    ghcr.io/jchrzaniuk/polish-energy-prices:latest
    ```
 
-   Aby przypiąć konfigurację do wydania 1.6.1, ustaw w `compose.yaml`:
+   Aby przypiąć konfigurację do konkretnego obrazu, ustaw w `compose.yaml`
+   tag `sha-` ze skrótem commita, z którego obraz powstał:
 
    ```text
-   ghcr.io/jchrzaniuk/polish-energy-prices:v1.6.1
+   ghcr.io/jchrzaniuk/polish-energy-prices:sha-541e5ec
+   ```
+
+   Obrazy nie są etykietowane numerem wydania, więc tag `v1.6.2` nie
+   istnieje. Listę dostępnych tagów pokaże:
+
+   ```bash
+   curl -s https://ghcr.io/v2/jchrzaniuk/polish-energy-prices/tags/list \
+     -H "Authorization: Bearer $(curl -s 'https://ghcr.io/token?scope=repository:jchrzaniuk/polish-energy-prices:pull' | jq -r .token)"
    ```
 
 4. Sprawdź odpowiedź:
