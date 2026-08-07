@@ -100,6 +100,22 @@ def validate_dynamic_zones(raw: object) -> dict[str, str]:
     return result
 
 
+def validate_dynamic_publications(raw: object) -> dict[str, str]:
+    """Validate a cached mapping of trading-day publication timestamps."""
+
+    if raw is None:
+        return {}
+    if not isinstance(raw, Mapping):
+        raise ValueError(
+            "Znaczniki publikacji Kompasu w pamięci podręcznej nie są obiektem"
+        )
+    result: dict[str, str] = {}
+    for raw_key, raw_value in raw.items():
+        key = date.fromisoformat(str(raw_key)).isoformat()
+        result[key] = str(raw_value)
+    return result
+
+
 def local_day_for_key(key: str) -> date:
     """Return the Warsaw calendar date represented by a UTC hour key."""
 

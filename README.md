@@ -173,10 +173,14 @@ oficjalnego cennika
 [Prąd ze zmienną dystrybucją](https://www.tauron.pl/dla-domu/prad/prad-z-usluga/prad-dynamiczna-dystrybucja),
 a harmonogram stref z Energetycznego Kompasu PSE.
 
-Harmonogram jest publikowany raz na dobę. Integracja pobiera go automatycznie
-i zachowuje na potrzeby bieżącej ceny oraz prognozy. Jeżeli dane na kolejną
-dobę nie są jeszcze dostępne, sprawdzenie jest ponawiane co godzinę. Własny
-cennik wymaga podania jednej ceny sprzedażowej brutto.
+PSE publikuje harmonogram doby handlowej stopniowo i wielokrotnie go
+rewiduje — kolejne rewizje mogą zmieniać strefy aż do wieczora danej doby.
+Integracja sprawdza Energetyczny Kompas co 15 minut i podmienia strefy doby,
+gdy tylko pojawi się nowszy znacznik publikacji niż ten już zapisany;
+republikacja tych samych stref nie liczy się jako zmiana. Jeżeli dane na
+kolejną dobę nie są jeszcze dostępne, sprawdzenie jest ponawiane przy
+kolejnym odświeżeniu. Własny cennik wymaga podania jednej ceny sprzedażowej
+brutto.
 
 Dla ENEA G12 sprawdź godziny na umowie albo liczniku. Taryfa określa liczbę
 godzin, ale konkretne przedziały ustala operator; domyślne `6-13,15-22` można

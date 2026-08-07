@@ -30,6 +30,7 @@ from .kompas import (
     build_kompas_url,
     local_day_for_key,
     parse_kompas,
+    validate_dynamic_publications,
     validate_dynamic_zones,
 )
 from .tariff import WARSAW, TariffDefinition, get_tariff
@@ -70,6 +71,7 @@ class EnergyPriceData:
     dynamic_last_checked: str | None = None
     dynamic_last_updated: str | None = None
     dynamic_publication_utc: str | None = None
+    dynamic_publications: dict[str, str] | None = None
     dynamic_error: str | None = None
 
     @property
@@ -124,6 +126,7 @@ class EnergyPriceSourceEngine:
                 "cogeneration": 0.0030,
             },
             dynamic_zones={} if self.tariff.dynamic_zone_source else None,
+            dynamic_publications={} if self.tariff.dynamic_zone_source else None,
         )
 
     def data_from_cache(self, stored: object) -> EnergyPriceData:
@@ -191,6 +194,11 @@ class EnergyPriceSourceEngine:
             ),
             dynamic_publication_utc=_optional_str(
                 stored.get("dynamic_publication_utc")
+            ),
+            dynamic_publications=(
+                validate_dynamic_publications(stored.get("dynamic_publications"))
+                if self.tariff.dynamic_zone_source
+                else None
             ),
             dynamic_error=_optional_str(stored.get("dynamic_error")),
         )
@@ -427,42 +435,61 @@ class EnergyPriceSourceEngine:
         fetch_bytes: FetchBytes,
         now: datetime,
     ) -> EnergyPriceData:
-        """Fetch a published Kompas day once and retry days not yet available."""
+        """Poll PSE for revisions of the current and next trading day.
+
+        Energetyczny Kompas PSE republishes each trading day up to a few
+        dozen times before its schedule settles; every request returns only
+        the currently active revision, which replaces the whole day
+        atomically and carries one ``publication_ts_utc`` shared by all 24
+        hours. Both D and D+1 are contacted on every refresh; a day's zones
+        are only replaced when the fetched revision is strictly newer than
+        the one already stored for that day, so a bare republication of the
+        same content does not touch ``dynamic_last_updated``.
+        """
 
         if not self.tariff.dynamic_zone_source:
             return current
 
         local_today = now.astimezone(WARSAW).date()
-        zones = dict(current.dynamic_zones or {})
         keep_from = local_today - timedelta(days=1)
         keep_until = local_today + timedelta(days=1)
+
         zones = {
             key: zone
-            for key, zone in zones.items()
+            for key, zone in (current.dynamic_zones or {}).items()
             if keep_from <= local_day_for_key(key) <= keep_until
         }
+        publications = {
+            day: publication
+            for day, publication in (current.dynamic_publications or {}).items()
+            if keep_from <= date.fromisoformat(day) <= keep_until
+        }
+
         newest_publication = current.dynamic_publication_utc
         changed = False
         errors: list[str] = []
-        checked_source = False
+
         for offset in range(2):
             day = local_today + timedelta(days=offset)
-            if any(local_day_for_key(key) == day for key in zones):
-                continue
-            checked_source = True
+            day_iso = day.isoformat()
             url = build_kompas_url(day)
             try:
                 snapshot = parse_kompas(
                     await fetch_bytes(url, MAX_KOMPAS_BYTES)
                 )
             except Exception as err:  # noqa: BLE001 - preserve cached revision
-                errors.append(f"{day.isoformat()}: {err}")
+                errors.append(f"{day_iso}: {err}")
                 continue
             if not snapshot.zones:
+                # Not yet published for this trading day; retried next time.
                 continue
-            day_keys = {
-                key for key in zones if local_day_for_key(key) == day
-            }
+
+            day_keys = {key for key in zones if local_day_for_key(key) == day}
+            if day_keys and not _publication_is_newer(
+                snapshot.publication_utc, publications.get(day_iso)
+            ):
+                continue  # no newer revision than the one already applied
+
             replacement = set(snapshot.zones)
             if day_keys != replacement or any(
                 zones.get(key) != zone for key, zone in snapshot.zones.items()
@@ -471,11 +498,13 @@ class EnergyPriceSourceEngine:
             for key in day_keys - replacement:
                 zones.pop(key, None)
             zones.update(snapshot.zones)
-            if snapshot.publication_utc and (
-                newest_publication is None
-                or snapshot.publication_utc > newest_publication
-            ):
-                newest_publication = snapshot.publication_utc
+            if snapshot.publication_utc:
+                publications[day_iso] = snapshot.publication_utc
+                if (
+                    newest_publication is None
+                    or snapshot.publication_utc > newest_publication
+                ):
+                    newest_publication = snapshot.publication_utc
 
         current_day_has_data = any(
             local_day_for_key(key) == local_today for key in zones
@@ -485,10 +514,9 @@ class EnergyPriceSourceEngine:
         return replace(
             current,
             dynamic_zones=zones,
+            dynamic_publications=publications,
             dynamic_source_url=KOMPAS_API_URL,
-            dynamic_last_checked=(
-                checked if checked_source else current.dynamic_last_checked
-            ),
+            dynamic_last_checked=checked,
             dynamic_last_updated=(
                 checked if changed else current.dynamic_last_updated
             ),
@@ -631,3 +659,25 @@ class EnergyPriceSourceEngine:
 
 def _optional_str(value: object) -> str | None:
     return None if value is None else str(value)
+
+
+def _publication_is_newer(candidate: str | None, stored: str | None) -> bool:
+    """Compare two ``publication_ts_utc`` markers as parsed datetimes.
+
+    An unparsable or missing marker on either side is treated as "no
+    marker", which forces the caller to accept the candidate revision.
+    """
+
+    if not stored:
+        return True
+    try:
+        stored_dt = datetime.fromisoformat(stored)
+    except ValueError:
+        return True
+    if not candidate:
+        return True
+    try:
+        candidate_dt = datetime.fromisoformat(candidate)
+    except ValueError:
+        return True
+    return candidate_dt > stored_dt

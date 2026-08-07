@@ -66,9 +66,14 @@ Obsługiwane źródła ceny energii:
   z Energetycznego Kompasu PSE;
 - `custom`: ceny brutto wpisane w `custom_prices`.
 
-Strefy G14dynamic są publikowane raz na dobę. Usługa zachowuje pobrany
-harmonogram i ponawia sprawdzenie co godzinę, dopóki dane na kolejną dobę nie
-będą dostępne. Dokumenty z rocznymi stawkami nadal sprawdza co 12 godzin.
+PSE rewiduje harmonogram doby handlowej wielokrotnie, aż do wieczora danej
+doby. Usługa sprawdza Energetyczny Kompas co 15 minut i podmienia strefy
+doby, gdy tylko pojawi się nowszy znacznik publikacji niż zapisany;
+republikacja tych samych stref nie liczy się jako zmiana. Skrócony,
+15-minutowy interwał dotyczy wyłącznie profili z dynamicznym źródłem stref —
+pozostałe profile w tej samej usłudze (np. URE) nadal odświeżają się zgodnie
+z `refresh_interval_hours`. Dokumenty z rocznymi stawkami oraz cennik
+G14dynamic nadal sprawdza co 12 godzin.
 
 Dla starszego licznika pracującego przez cały rok według czasu zimowego ustaw
 `meter_clock: fixed_winter_time`. ENEA G12 może dodatkowo używać własnych

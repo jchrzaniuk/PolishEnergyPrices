@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from http.server import ThreadingHTTPServer
 import json
@@ -10,7 +11,7 @@ from pathlib import Path
 import tempfile
 from threading import Thread
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
@@ -202,6 +203,50 @@ data_dir: DATA_DIR
         second = datetime(2026, 10, 25, 2, 30, tzinfo=WARSAW, fold=1)
         self.assertEqual(timedelta(hours=1), second.utcoffset())
         self.assertNotEqual(_hour_key(first), _hour_key(second))
+
+    def test_only_dynamic_profile_uses_the_15_minute_refresh_cadence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    price_source: regulated
+  dyn:
+    operator: tauron
+    tariff: G14dynamic
+    price_source: tauron_g14dynamic
+mqtt:
+  enabled: false
+refresh_interval_hours: 12
+data_dir: {directory}
+"""
+            path = Path(directory) / "service-test.yaml"
+            path.write_text(content, encoding="utf-8")
+            service = PriceService(load_config(path))
+
+            # The non-dynamic profile keeps the configured hourly interval;
+            # only the G14dynamic profile is pinned to 15 minutes so that a
+            # regulated profile sharing the same service instance is not
+            # dragged into polling PSE-speed cadence.
+            self.assertEqual(
+                timedelta(hours=12).total_seconds(),
+                service._profile_interval_seconds(service.profiles["dom"]),
+            )
+            self.assertEqual(
+                timedelta(minutes=15).total_seconds(),
+                service._profile_interval_seconds(service.profiles["dyn"]),
+            )
+
+            with patch.object(
+                ProfileRuntime, "refresh", new=AsyncMock()
+            ) as refresh_mock:
+                asyncio.run(
+                    service._refresh_profiles(
+                        ["dyn"], datetime(2026, 8, 4, 12, tzinfo=WARSAW)
+                    )
+                )
+            self.assertEqual(1, refresh_mock.await_count)
 
     @staticmethod
     def _service_config(directory: str, *, profiles: int):

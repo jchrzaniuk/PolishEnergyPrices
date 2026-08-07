@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from copy import deepcopy
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -42,6 +42,7 @@ from .config import MqttConfig, ProfileConfig, ServiceConfig
 _LOGGER = logging.getLogger(__name__)
 _HTTP_TIMEOUT = 45
 _USER_AGENT = f"PolishEnergyPricesService/{__version__}"
+_DYNAMIC_PROFILE_REFRESH_SECONDS = 15 * 60
 
 
 class HttpFetcher:
@@ -425,13 +426,11 @@ class PriceService:
         try:
             await self.refresh_all()
 
-            refresh_seconds = self.config.refresh_interval_hours * 3600
-            if any(
-                profile.engine.tariff.dynamic_zone_source
-                for profile in self.profiles.values()
-            ):
-                refresh_seconds = min(refresh_seconds, 60 * 60)
-            next_refresh = asyncio.get_running_loop().time() + refresh_seconds
+            loop = asyncio.get_running_loop()
+            next_refresh = {
+                profile_id: loop.time() + self._profile_interval_seconds(profile)
+                for profile_id, profile in self.profiles.items()
+            }
             last_hour = _hour_key(datetime.now(WARSAW))
             while not self._stop.is_set():
                 try:
@@ -444,23 +443,55 @@ class PriceService:
                     self.recalculate(now)
                     self.mqtt.publish_all()
                     last_hour = hour
-                if asyncio.get_running_loop().time() >= next_refresh:
-                    await self.refresh_all(now)
-                    next_refresh = (
-                        asyncio.get_running_loop().time() + refresh_seconds
-                    )
+                loop_time = loop.time()
+                due = [
+                    profile_id
+                    for profile_id, deadline in next_refresh.items()
+                    if loop_time >= deadline
+                ]
+                if due:
+                    await self._refresh_profiles(due, now)
+                    for profile_id in due:
+                        next_refresh[profile_id] = (
+                            loop.time()
+                            + self._profile_interval_seconds(
+                                self.profiles[profile_id]
+                            )
+                        )
         finally:
             self._shutdown()
 
     def stop(self) -> None:
         self._stop.set()
 
+    def _profile_interval_seconds(self, profile: ProfileRuntime) -> float:
+        """Return the refresh cadence for one profile, in seconds.
+
+        Profiles backed by Energetyczny Kompas PSE (``dynamic_zone_source``)
+        are polled every 15 minutes so revisions of the trading day are
+        picked up promptly; every other profile keeps the configured
+        ``refresh_interval_hours`` so URE and operator documents are not
+        downloaded needlessly often just because a dynamic profile shares
+        the same service instance.
+        """
+
+        if profile.engine.tariff.dynamic_zone_source:
+            return _DYNAMIC_PROFILE_REFRESH_SECONDS
+        return self.config.refresh_interval_hours * 3600
+
     async def refresh_all(self, now: datetime | None = None) -> None:
+        """Refresh every configured profile; used at startup and by tests."""
+
         checked_at = now or datetime.now(WARSAW)
-        for profile_id, profile in self.profiles.items():
+        await self._refresh_profiles(list(self.profiles), checked_at)
+
+    async def _refresh_profiles(
+        self, profile_ids: Iterable[str], now: datetime
+    ) -> None:
+        for profile_id in profile_ids:
             _LOGGER.info("Odświeżam źródła profilu %s", profile_id)
-            await profile.refresh(self.fetcher, checked_at)
-        self.recalculate(checked_at)
+            await self.profiles[profile_id].refresh(self.fetcher, now)
+        self.recalculate(now)
         self.mqtt.publish_all()
 
     def recalculate(self, now: datetime | None = None) -> None:
