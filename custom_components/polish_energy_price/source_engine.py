@@ -147,7 +147,12 @@ class EnergyPriceSourceEngine:
             )
         )
         stored_source = str(stored.get("source", "bundled"))
-        if stored.get("source_url"):
+        # The "_cache" suffix means "the last fetch attempt failed, this is
+        # the last known-good value" — not "this was loaded from disk". A
+        # clean restart that reloads a payload with no recorded error must
+        # keep the plain source name, or every profile reports a false
+        # warning for up to 12 hours until the next refresh throttle clears.
+        if stored.get("source_url") and stored.get("error"):
             if stored_source.startswith("tauron_g13s"):
                 stored_source = "tauron_g13s_cache"
             elif stored_source.startswith("tauron_g14dynamic"):

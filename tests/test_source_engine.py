@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import date, datetime
 import json
 import unittest
 
+from custom_components.polish_energy_price.forecast import build_forecast
 from custom_components.polish_energy_price.kompas import local_day_for_key
+from custom_components.polish_energy_price.official import (
+    TAURON_G13S_PAGE,
+    TAURON_G14DYNAMIC_PRICE_LIST,
+)
 from custom_components.polish_energy_price.source_engine import (
     EnergyPriceSourceEngine,
 )
-from custom_components.polish_energy_price.tariff import WARSAW
+from custom_components.polish_energy_price.tariff import WARSAW, get_tariff
 
 
 class SourceEngineTests(unittest.TestCase):
@@ -324,6 +330,174 @@ class SourceEngineTests(unittest.TestCase):
         self.assertNotIn("2026-08-02", later.dynamic_publications or {})
         self.assertEqual(set(), self._zones_for_day(later, 2026, 8, 1))
         self.assertEqual(set(), self._zones_for_day(later, 2026, 8, 2))
+
+    def test_healthy_cache_payload_keeps_plain_source_name(self) -> None:
+        # A payload with no recorded error means the last fetch succeeded;
+        # reloading it after a restart must not invent a "_cache" warning.
+        cases = [
+            ("regulated", "tauron", "G11", "ure", "https://ure.example/x.xlsx"),
+            ("tauron_g13s", "tauron", "G13s", "tauron_g13s", TAURON_G13S_PAGE),
+            (
+                "tauron_g14dynamic",
+                "tauron",
+                "G14dynamic",
+                "tauron_g14dynamic",
+                TAURON_G14DYNAMIC_PRICE_LIST,
+            ),
+        ]
+        for price_source, operator, group, source_name, source_url in cases:
+            with self.subTest(price_source=price_source):
+                engine = EnergyPriceSourceEngine(operator, group, price_source)
+                healthy = replace(
+                    engine.initial_data(),
+                    source=source_name,
+                    source_url=source_url,
+                    last_checked="2026-08-04T08:00:00+02:00",
+                    last_updated="2026-08-04T08:00:00+02:00",
+                    error=None,
+                )
+                payload = engine.cache_payload(healthy)
+                restored = engine.data_from_cache(payload)
+                self.assertEqual(source_name, restored.source)
+                self.assertIsNone(restored.error)
+
+    def test_cache_payload_with_stored_error_gets_cache_suffix(self) -> None:
+        # A payload that recorded a failed fetch must keep signalling that
+        # the value is a last-known-good fallback, including when it was
+        # already saved with the "_cache" suffix from an earlier failure.
+        cases = [
+            ("regulated", "tauron", "G11", "ure", "ure_cache"),
+            ("regulated", "tauron", "G11", "ure_cache", "ure_cache"),
+            ("tauron_g13s", "tauron", "G13s", "tauron_g13s", "tauron_g13s_cache"),
+            (
+                "tauron_g13s",
+                "tauron",
+                "G13s",
+                "tauron_g13s_cache",
+                "tauron_g13s_cache",
+            ),
+            (
+                "tauron_g14dynamic",
+                "tauron",
+                "G14dynamic",
+                "tauron_g14dynamic",
+                "tauron_g14dynamic_cache",
+            ),
+            (
+                "tauron_g14dynamic",
+                "tauron",
+                "G14dynamic",
+                "tauron_g14dynamic_cache",
+                "tauron_g14dynamic_cache",
+            ),
+        ]
+        for price_source, operator, group, source_name, expected in cases:
+            with self.subTest(price_source=price_source, source_name=source_name):
+                engine = EnergyPriceSourceEngine(operator, group, price_source)
+                failed = replace(
+                    engine.initial_data(),
+                    source=source_name,
+                    source_url="https://example.invalid/last-known-good",
+                    last_checked="2026-08-04T08:00:00+02:00",
+                    error="brak odpowiedzi",
+                )
+                payload = engine.cache_payload(failed)
+                restored = engine.data_from_cache(payload)
+                self.assertEqual(expected, restored.source)
+                self.assertEqual("brak odpowiedzi", restored.error)
+
+    def test_cache_payload_without_source_url_is_bundled(self) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G14dynamic", "tauron_g14dynamic"
+        )
+        payload = engine.cache_payload(engine.initial_data())
+        restored = engine.data_from_cache(payload)
+        self.assertEqual("bundled", restored.source)
+
+    def test_healthy_g14dynamic_survives_restart_without_false_warning(
+        self,
+    ) -> None:
+        """Reproduces the reported bug end to end and proves the fix.
+
+        Healthy state -> cache_payload -> data_from_cache (simulated
+        restart) -> _refresh_energy inside the 12h throttle window (the
+        fetch callback must not even be invoked) -> build_forecast must
+        report "current", not "cache_or_warning".
+        """
+
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G14dynamic", "tauron_g14dynamic"
+        )
+        tariff = get_tariff("tauron", "G14dynamic")
+        healthy = replace(
+            engine.initial_data(),
+            source="tauron_g14dynamic",
+            source_url=TAURON_G14DYNAMIC_PRICE_LIST,
+            last_checked="2026-08-04T08:00:00+02:00",
+            last_updated="2026-08-04T08:00:00+02:00",
+            error=None,
+        )
+
+        payload = engine.cache_payload(healthy)
+        restored = engine.data_from_cache(payload)
+        self.assertEqual("tauron_g14dynamic", restored.source)
+
+        async def fetch_must_not_be_called(*_args, **_kwargs):
+            raise AssertionError(
+                "fetch nie powinien zostać wywołany w oknie throttle'a 12h"
+            )
+
+        async def run_sync(function, *args):
+            return function(*args)
+
+        later = datetime(2026, 8, 4, 12, tzinfo=WARSAW)
+        refreshed = asyncio.run(
+            engine._refresh_energy(
+                restored, later.isoformat(), fetch_must_not_be_called, run_sync
+            )
+        )
+        self.assertEqual("tauron_g14dynamic", refreshed.source)
+        self.assertIsNone(refreshed.error)
+
+        forecast = build_forecast(tariff, refreshed, later, hours=1)
+        self.assertEqual("current", forecast.source_status)
+
+    def test_g14dynamic_fetch_failure_still_reports_cache_or_warning(
+        self,
+    ) -> None:
+        """The opposite case: a real fetch failure must still warn."""
+
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G14dynamic", "tauron_g14dynamic"
+        )
+        tariff = get_tariff("tauron", "G14dynamic")
+        healthy = replace(
+            engine.initial_data(),
+            source="tauron_g14dynamic",
+            source_url=TAURON_G14DYNAMIC_PRICE_LIST,
+            last_checked="2026-08-04T08:00:00+02:00",
+            last_updated="2026-08-04T08:00:00+02:00",
+            error=None,
+        )
+
+        async def fetch_failure(*_args, **_kwargs):
+            raise TimeoutError("brak odpowiedzi")
+
+        async def run_sync(function, *args):
+            return function(*args)
+
+        # Outside the 12h throttle window, so a real fetch is attempted.
+        later = datetime(2026, 8, 5, 0, tzinfo=WARSAW)
+        refreshed = asyncio.run(
+            engine._refresh_energy(
+                healthy, later.isoformat(), fetch_failure, run_sync
+            )
+        )
+        self.assertEqual("tauron_g14dynamic_cache", refreshed.source)
+        self.assertIn("brak odpowiedzi", refreshed.error or "")
+
+        forecast = build_forecast(tariff, refreshed, later, hours=1)
+        self.assertEqual("cache_or_warning", forecast.source_status)
 
     @staticmethod
     def _zones_for_day(data, year: int, month: int, day: int) -> set[str]:
