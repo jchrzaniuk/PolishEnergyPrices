@@ -10,6 +10,12 @@ Energia jako **encja z bieżącą ceną**. Jej atrybuty zawierają także progno
 kosztu krańcowego na następne 48 godzin. Kontener publikuje bieżącą cenę i tę
 samą prognozę przez API HTTP oraz retained MQTT.
 
+Prosument rozliczany w systemie **net-billing** może dodatkowo włączyć cenę
+energii wprowadzonej do sieci: 15-minutową RCE albo miesięczną RCEm, pobierane
+wprost z PSE. Powstaje wtedy druga encja, gotowa do wskazania w panelu Energia
+w sekcji zwrotu do sieci. Szczegóły opisuje sekcja
+[Net-billing: cena energii wprowadzonej do sieci](#net-billing-cena-energii-wprowadzonej-do-sieci).
+
 Silnik łączy cenę energii czynnej sprzedawcy z urzędu z właściwym dla
 aktualnej godziny składnikiem sieciowym, opłatą jakościową, OZE,
 kogeneracyjną i VAT-em. Co 12 godzin sprawdza cenę sprzedaży energii oraz
