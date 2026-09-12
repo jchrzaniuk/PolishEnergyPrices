@@ -109,7 +109,7 @@ wartość `1.23`; usługa jej nie narzuca automatycznie.
 | `/api/forecast/<profil>` | prognoza jednego profilu |
 | `/api/forecast/<profil>?hours=24` | prognoza o długości od 1 do 168 godzin |
 | `/api/status` | stan źródeł i ostatnie błędy |
-| `/api/export` | cena eksportu i nadchodzące okresy dla wszystkich profili z włączonym rozliczeniem |
+| `/api/export` | cena eksportu i nadchodzące okresy dla wszystkich profili z włączonym rozliczeniem (blok zawiera też klucz `negative` — `true`/`false` w trybie RCE, `null` w trybie RCEm) |
 | `/api/export/<profil>` | cena eksportu i nadchodzące okresy jednego profilu; `404`, jeżeli profil nie ma `export_settlement` |
 | `/api/export/<profil>?hours=24` | jak wyżej, z listą okresów o długości od 1 do 168 godzin |
 
@@ -139,6 +139,7 @@ polish_energy_prices/dom/export_price_net
 polish_energy_prices/dom/export_raw_net
 polish_energy_prices/dom/export_period
 polish_energy_prices/dom/export_settlement
+polish_energy_prices/dom/export_negative
 ```
 
 Temat `state` zawiera bieżący obiekt JSON. Temat `forecast` zawiera retained
@@ -149,8 +150,10 @@ odświeżeniu źródeł i po zmianie godziny.
 Temat `export` (retained) zawiera cenę eksportu wraz z nadchodzącymi okresami,
 tak jak `forecast`; skalary `export_price_net`, `export_raw_net`,
 `export_period` i `export_settlement` ułatwiają podłączenie kanałów openHAB.
-Profile bez włączonego rozliczenia eksportu (`export_settlement: off`) nie
-otrzymują żadnego z tych tematów.
+Temat `export_negative` mówi, czy surowa cena bieżącego okresu jest ujemna
+(`true`/`false` w trybie RCE, pusty łańcuch w trybie RCEm). Profile bez
+włączonego rozliczenia eksportu (`export_settlement: off`) nie otrzymują
+żadnego z tych tematów.
 
 Jeżeli dane wygasną, `forecast` zostaje zastąpiony obiektem z pustą listą
 slotów, `complete: false` i `source_status: expired`. Broker nie zachowuje w ten

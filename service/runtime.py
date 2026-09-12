@@ -287,6 +287,7 @@ class ProfileRuntime:
             ),
             "price_net": price.value if price else None,
             "raw_net": price.raw if price else None,
+            "negative": (price.raw < 0) if price and is_rce else None,
             "correction": self.config.export_correction,
             "unit": "PLN/kWh",
             "available": price is not None,
@@ -435,6 +436,11 @@ class MqttPublisher:
             )
             self._publish(f"{base}/export_period", export["period"] or "")
             self._publish(f"{base}/export_settlement", export["settlement"])
+            negative = export["negative"]
+            self._publish(
+                f"{base}/export_negative",
+                "" if negative is None else ("true" if negative else "false"),
+            )
         scalar_keys = (
             "price_gross",
             "energy_gross",

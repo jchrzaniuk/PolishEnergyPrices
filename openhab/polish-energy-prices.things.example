@@ -29,4 +29,5 @@ Thing mqtt:topic:pepDom "Polish Energy Prices, dom" (mqtt:broker:pepBroker) [
     Type datetime : lastCalculated    "Ostatnie obliczenie"       [ stateTopic="polish_energy_prices/dom/last_calculated" ]
     Type number   : exportPriceNet   "Cena energii wprowadzonej netto" [ stateTopic="polish_energy_prices/dom/export_price_net", unit="PLN/kWh" ]
     Type string   : exportPeriod     "Okres rozliczeniowy eksportu"     [ stateTopic="polish_energy_prices/dom/export_period" ]
+    Type switch   : exportNegative   "Ujemna cena RCE"                  [ stateTopic="polish_energy_prices/dom/export_negative", on="true", off="false" ]
 }

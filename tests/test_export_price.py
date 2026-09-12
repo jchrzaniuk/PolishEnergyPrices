@@ -9,6 +9,7 @@ import unittest
 from custom_components.polish_energy_price.export_price import (
     build_rce_url,
     export_price_at,
+    negative_periods,
     parse_rce,
     parse_rcem,
     upcoming_export_periods,
@@ -267,6 +268,24 @@ class UpcomingExportPeriodsTests(unittest.TestCase):
         prices = {"2026-09-10T22:00:00+00:00": 0.20}
         result = upcoming_export_periods(prices, now)
         self.assertEqual("2026-09-11T00:00:00+02:00", result[0]["start"])
+
+
+class NegativePeriodsTests(unittest.TestCase):
+    def test_returns_only_negative_periods_in_order(self) -> None:
+        periods = [
+            {"start": "a", "cena_netto": 0.0, "rce_netto": -0.05},
+            {"start": "b", "cena_netto": 0.2, "rce_netto": 0.20},
+            {"start": "c", "cena_netto": 0.0, "rce_netto": -0.01},
+        ]
+        result = negative_periods(periods)
+        self.assertEqual([periods[0], periods[2]], result)
+
+    def test_all_positive_periods_return_empty_list(self) -> None:
+        periods = [{"start": "a", "cena_netto": 0.1, "rce_netto": 0.1}]
+        self.assertEqual([], negative_periods(periods))
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        self.assertEqual([], negative_periods([]))
 
 
 if __name__ == "__main__":

@@ -280,6 +280,72 @@ data_dir: {directory}
         self.assertIsNone(export["error"])
         self.assertIsNone(result["errors"]["export"])
 
+    def test_export_block_negative_true_for_negative_price(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    export_settlement: rce
+mqtt:
+  enabled: false
+data_dir: {directory}
+"""
+            path = Path(directory) / "config.yaml"
+            path.write_text(content, encoding="utf-8")
+            config = load_config(path)
+            runtime = ProfileRuntime(config.profiles[0], Path(directory))
+            now = datetime(2026, 7, 31, 12, 0, tzinfo=WARSAW)
+            runtime.data.export_prices = {rce_period_key(now): -0.05}
+            result = runtime.snapshot(now)
+
+        self.assertTrue(result["export"]["negative"])
+
+    def test_export_block_negative_false_for_positive_price(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    export_settlement: rce
+mqtt:
+  enabled: false
+data_dir: {directory}
+"""
+            path = Path(directory) / "config.yaml"
+            path.write_text(content, encoding="utf-8")
+            config = load_config(path)
+            runtime = ProfileRuntime(config.profiles[0], Path(directory))
+            now = datetime(2026, 7, 31, 12, 0, tzinfo=WARSAW)
+            runtime.data.export_prices = {rce_period_key(now): 0.2}
+            result = runtime.snapshot(now)
+
+        self.assertFalse(result["export"]["negative"])
+
+    def test_export_block_negative_none_in_rcem_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    export_settlement: rcem
+mqtt:
+  enabled: false
+data_dir: {directory}
+"""
+            path = Path(directory) / "config.yaml"
+            path.write_text(content, encoding="utf-8")
+            config = load_config(path)
+            runtime = ProfileRuntime(config.profiles[0], Path(directory))
+            now = datetime(2026, 7, 31, 12, 0, tzinfo=WARSAW)
+            runtime.data.rcem_prices = {f"{now.year:04d}-{now.month:02d}": 0.5}
+            result = runtime.snapshot(now)
+
+        self.assertIsNone(result["export"]["negative"])
+
     def test_profile_without_export_snapshot_has_no_export_block(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = self._service_config(directory, profiles=1)
@@ -407,6 +473,42 @@ data_dir: {directory}
             }.issubset(export_topics)
         )
         self.assertFalse(any(topic.startswith("polish_energy_prices/domek/export") for topic in export_topics))
+
+    def test_mqtt_publishes_export_negative_topic_for_rce_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    export_settlement: rce
+mqtt:
+  enabled: false
+data_dir: {directory}
+"""
+            path = Path(directory) / "config.yaml"
+            path.write_text(content, encoding="utf-8")
+            service = PriceService(load_config(path))
+            now = datetime(2026, 8, 4, 12, 15, tzinfo=WARSAW)
+            service.profiles["dom"].data.export_prices = {rce_period_key(now): -0.05}
+            service.recalculate(now)
+            publisher = MqttPublisher(
+                service.config.mqtt,
+                service.snapshots,
+                service.forecasts,
+                service.export_snapshots,
+            )
+            publisher._client = MagicMock()
+            publisher._connected = True
+            publisher.publish_all()
+
+        published = {
+            call.args[0]: call.args[1]
+            for call in publisher._client.publish.call_args_list
+        }
+        self.assertEqual(
+            "true", published["polish_energy_prices/dom/export_negative"]
+        )
 
     @staticmethod
     def _service_config(directory: str, *, profiles: int):

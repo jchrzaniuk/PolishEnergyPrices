@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 import json
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 from urllib.parse import quote, urlencode
 
 from .tariff import WARSAW
@@ -352,6 +352,14 @@ def upcoming_export_periods(
         }
         for key in upcoming[:limit]
     ]
+
+
+def negative_periods(
+    periods: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Zwróć pozycje ``upcoming_export_periods()`` z ujemną surową ceną RCE."""
+
+    return [dict(period) for period in periods if period["rce_netto"] < 0]
 
 
 def _minutes_of_day(value: str, context: str) -> int:

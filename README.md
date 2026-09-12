@@ -385,6 +385,15 @@ zero, a depozyt prosumencki się nie zmniejsza. Surowa, ujemna cena PSE
 pozostaje widoczna — w atrybucie sensora „Cena RCE netto [PLN/kWh]” oraz w
 polu `raw_net` usługi Docker — ale nie wpływa na wartość rozliczeniową.
 
+W trybie RCE integracja dodaje osobną encję binarną **Ujemna cena RCE**, żeby
+automatyzacja nie musiała odróżniać „zero, bo ujemna” od „zero, bo taka jest
+cena” za pomocą szablonu. Encja jest włączona, gdy surowa RCE bieżącego
+okresu jest mniejsza od zera, a jej atrybuty pokazują też liczbę i najbliższy
+termin ujemnych okresów z prognozy. Odpowiednikiem w usłudze Docker jest
+klucz `negative` w bloku `export` oraz temat MQTT `export_negative`. Flaga
+pozwala zbudować automatyzację, która wstrzymuje eksport do sieci albo
+przekierowuje energię do magazynu na czas ujemnej ceny.
+
 ### Publikacja RCEm
 
 RCEm za dany miesiąc jest publikowana 11. dnia miesiąca następnego. Do tego

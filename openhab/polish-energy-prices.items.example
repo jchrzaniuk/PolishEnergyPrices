@@ -15,3 +15,4 @@ Switch PEP_WaznaTaryfa "Ważna taryfa" { channel="mqtt:topic:pepBroker:pepDom:pr
 DateTime PEP_OstatnieObliczenie "Ostatnie obliczenie [%1$tF %1$tR]" { channel="mqtt:topic:pepBroker:pepDom:lastCalculated" }
 Number:EnergyPrice PEP_CenaEksportuNetto "Cena energii wprowadzonej netto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:exportPriceNet" }
 String PEP_OkresEksportu "Okres rozliczeniowy eksportu [%s]" { channel="mqtt:topic:pepBroker:pepDom:exportPeriod" }
+Switch PEP_EksportUjemny "Ujemna cena RCE" { channel="mqtt:topic:pepBroker:pepDom:exportNegative" }
