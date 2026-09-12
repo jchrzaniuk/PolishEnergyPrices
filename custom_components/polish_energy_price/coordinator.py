@@ -38,7 +38,7 @@ DYNAMIC_UPDATE_INTERVAL = timedelta(minutes=15)
 EXPORT_UPDATE_INTERVAL = timedelta(hours=1)
 REQUEST_TIMEOUT = ClientTimeout(total=45)
 STORAGE_VERSION = 1
-REQUEST_HEADERS = {"User-Agent": "Home Assistant PolishEnergyPrices/1.7.0"}
+REQUEST_HEADERS = {"User-Agent": "Home Assistant PolishEnergyPrices/1.8.0"}
 
 
 class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
