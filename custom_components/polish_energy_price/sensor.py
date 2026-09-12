@@ -18,15 +18,21 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_CUSTOM_PRICES,
     CONF_DAY_HOURS,
+    CONF_EXPORT_CORRECTION,
+    CONF_EXPORT_SETTLEMENT,
     CONF_METER_CLOCK,
     CONF_OPERATOR,
     CONF_PRICE_SOURCE,
     CONF_TARIFF,
+    DEFAULT_EXPORT_CORRECTION,
     DOMAIN,
+    EXPORT_SETTLEMENT_OFF,
+    EXPORT_SETTLEMENT_RCE,
     METER_CLOCK_FIXED_WINTER,
     PRICE_SOURCE_CUSTOM,
 )
 from .coordinator import EnergyPriceCoordinator
+from .export_price import ExportPrice, export_price_at, upcoming_export_periods
 from .forecast import build_forecast, forecast_attributes
 from .tariff import (
     DynamicZoneUnavailable,
@@ -34,6 +40,7 @@ from .tariff import (
     OPERATOR_NAMES,
     SELLER_NAMES,
     VAT,
+    WARSAW,
     get_tariff,
     price_at,
 )
@@ -59,6 +66,14 @@ async def async_setup_entry(
         for key, name, icon in PRICE_COMPONENTS
     ]
     entities = [sensor, *component_sensors]
+    settings = {**entry.data, **entry.options}
+    export_settlement = settings.get(CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF)
+    if export_settlement != EXPORT_SETTLEMENT_OFF:
+        entities.append(
+            PolishEnergyExportPriceSensor(
+                entry, entry.runtime_data.coordinator, sensor
+            )
+        )
     async_add_entities(entities)
 
     @callback
@@ -67,7 +82,9 @@ async def async_setup_entry(
             entity.async_write_ha_state()
 
     entry.async_on_unload(
-        async_track_time_change(hass, handle_hour_change, minute=0, second=0)
+        async_track_time_change(
+            hass, handle_hour_change, minute=[0, 15, 30, 45], second=0
+        )
     )
 
 
@@ -401,3 +418,106 @@ class PolishEnergyPriceComponentSensor(
         if not self.available:
             return None
         return self._price_sensor.price_components()[self._component_key]
+
+
+class PolishEnergyExportPriceSensor(
+    CoordinatorEntity[EnergyPriceCoordinator], SensorEntity
+):
+    """Current net price of energy exported to the grid (net-billing)."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Cena energii wprowadzonej do sieci"
+    _attr_icon = "mdi:transmission-tower-import"
+    _attr_native_unit_of_measurement = "PLN/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 5
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        coordinator: EnergyPriceCoordinator,
+        price_sensor: PolishEnergyPriceSensor,
+    ) -> None:
+        super().__init__(coordinator)
+        settings = {**entry.data, **entry.options}
+        self._settlement = str(
+            settings.get(CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF)
+        )
+        self._correction = float(
+            settings.get(CONF_EXPORT_CORRECTION, DEFAULT_EXPORT_CORRECTION)
+        )
+        self._attr_unique_id = f"{entry.entry_id}_export_price"
+        self._attr_device_info = price_sensor.device_info
+
+    def _price(self) -> ExportPrice | None:
+        """Return the export price for the current settlement period."""
+
+        return export_price_at(
+            dt_util.now(),
+            settlement=self._settlement,
+            rce_prices=self.coordinator.data.export_prices,
+            rcem_prices=self.coordinator.data.rcem_prices,
+            correction=self._correction,
+        )
+
+    def _period_label(self, price: ExportPrice) -> str:
+        """Return the current settlement period as a human-readable label."""
+
+        if self._settlement == EXPORT_SETTLEMENT_RCE:
+            return (
+                datetime.fromisoformat(price.period).astimezone(WARSAW).isoformat()
+            )
+        return price.period
+
+    @property
+    def available(self) -> bool:
+        """Require both the coordinator and a price for the current period."""
+
+        return super().available and self._price() is not None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the settled export price in PLN/kWh, floored at zero."""
+
+        price = self._price()
+        return price.value if price else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the raw PSE price, its source and the settlement basis."""
+
+        data = self.coordinator.data
+        price = self._price()
+        is_rce = self._settlement == EXPORT_SETTLEMENT_RCE
+        raw_label = (
+            "Cena RCE netto [PLN/kWh]" if is_rce else "Cena RCEm netto [PLN/kWh]"
+        )
+        attributes: dict[str, Any] = {
+            "Cena netto [PLN/kWh]": price.value if price else None,
+            raw_label: price.raw if price else None,
+            "Współczynnik korygujący": self._correction,
+            "Podstawa rozliczenia": (
+                "RCE — okres 15-minutowy" if is_rce else "RCEm — cena miesięczna"
+            ),
+            "Okres rozliczeniowy": self._period_label(price) if price else None,
+            "VAT i akcyza": "Nie dotyczy (ceny netto)",
+            "Źródło ceny": (
+                data.export_source_url if is_rce else data.rcem_source_url
+            ),
+            "Ostatnia kontrola": (
+                data.export_last_checked if is_rce else data.rcem_last_checked
+            ),
+            "Ostatnia aktualizacja": data.export_last_updated if is_rce else None,
+            "Ostatnia publikacja PSE": (
+                data.export_publication_utc if is_rce else None
+            ),
+            "Ostatni błąd": (data.export_error if is_rce else data.rcem_error)
+            or "Brak",
+        }
+        if is_rce:
+            attributes["Znane okresy"] = len(data.export_prices or {})
+            attributes["Ceny kolejnych okresów"] = upcoming_export_periods(
+                data.export_prices or {}, dt_util.now(), correction=self._correction
+            )
+        return attributes

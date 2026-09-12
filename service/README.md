@@ -88,6 +88,16 @@ Dla starszego licznika pracującego przez cały rok według czasu zimowego ustaw
 `meter_clock: fixed_winter_time`. ENEA G12 może dodatkowo używać własnych
 przedziałów, np. `day_hours: "6-13,15-22"`.
 
+Rozliczenie energii wprowadzonej do sieci (net-billing) włącza `export_settlement`:
+
+- `off` (domyślnie): brak rozliczenia eksportu;
+- `rce`: 15-minutowa rynkowa cena energii z PSE;
+- `rcem`: miesięczna rynkowa cena energii z PSE.
+
+`export_correction` to ustawowy współczynnik korygujący depozytu prosumenckiego,
+w zakresie 0.5–2.0, domyślnie `1.0`. Od 1.02.2025 ustawa o OZE przewiduje
+wartość `1.23`; usługa jej nie narzuca automatycznie.
+
 ## HTTP
 
 | Zasób | Zawartość |
@@ -99,6 +109,9 @@ przedziałów, np. `day_hours: "6-13,15-22"`.
 | `/api/forecast/<profil>` | prognoza jednego profilu |
 | `/api/forecast/<profil>?hours=24` | prognoza o długości od 1 do 168 godzin |
 | `/api/status` | stan źródeł i ostatnie błędy |
+| `/api/export` | cena eksportu i nadchodzące okresy dla wszystkich profili z włączonym rozliczeniem |
+| `/api/export/<profil>` | cena eksportu i nadchodzące okresy jednego profilu; `404`, jeżeli profil nie ma `export_settlement` |
+| `/api/export/<profil>?hours=24` | jak wyżej, z listą okresów o długości od 1 do 168 godzin |
 
 Endpoint prognozy nie odświeża źródeł. Korzysta ze spójnego snapshotu danych
 wyliczonego po starcie, po zmianie godziny i po planowym odświeżeniu. Odpowiedź
@@ -121,12 +134,23 @@ polish_energy_prices/dom/energy_gross
 polish_energy_prices/dom/distribution_gross
 polish_energy_prices/dom/zone
 polish_energy_prices/dom/source_status
+polish_energy_prices/dom/export
+polish_energy_prices/dom/export_price_net
+polish_energy_prices/dom/export_raw_net
+polish_energy_prices/dom/export_period
+polish_energy_prices/dom/export_settlement
 ```
 
 Temat `state` zawiera bieżący obiekt JSON. Temat `forecast` zawiera retained
 prognozę 48 godzin. Pozostałe tematy mają pojedyncze wartości wygodne dla
 kanałów openHAB. Usługa publikuje ceny i prognozę po uruchomieniu, po każdym
 odświeżeniu źródeł i po zmianie godziny.
+
+Temat `export` (retained) zawiera cenę eksportu wraz z nadchodzącymi okresami,
+tak jak `forecast`; skalary `export_price_net`, `export_raw_net`,
+`export_period` i `export_settlement` ułatwiają podłączenie kanałów openHAB.
+Profile bez włączonego rozliczenia eksportu (`export_settlement: off`) nie
+otrzymują żadnego z tych tematów.
 
 Jeżeli dane wygasną, `forecast` zostaje zastąpiony obiektem z pustą listą
 slotów, `complete: false` i `source_status: expired`. Broker nie zachowuje w ten
@@ -155,7 +179,9 @@ połączone z Itemami `Number:EnergyPrice`.
 Ostatni poprawny zestaw danych jest przechowywany w woluminie `/data`. Chwilowa
 awaria URE, OSD albo brokera MQTT nie usuwa ceny. Pole `source_status` oraz
 `/api/status` pokazują użycie cache i treść ostatniego błędu. Wygasła taryfa
-powoduje `available: false`; usługa nie podaje jej jako aktualnej ceny.
+powoduje `available: false`; usługa nie podaje jej jako aktualnej ceny. Błąd
+pobrania RCE albo RCEm zachowuje ostatnie znane ceny eksportu i trafia do
+`errors.export` oraz do pola `error` bloku eksportu.
 
 Obraz działa jako użytkownik o UID `10001`. Przy użyciu katalogu hosta zamiast
 woluminu nazwanego nadaj mu prawo zapisu, np. `chown -R 10001:10001 ./data`.

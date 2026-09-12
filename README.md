@@ -344,6 +344,95 @@ G13s korzysta z godzinowego trybu mostu zamiast mnożenia całego rejestru przez
 jedną stawkę. Encjowy licznik `kWh` nadal może działać bez mostu, bezpośrednio z
 sensorem bieżącej ceny w panelu Energia.
 
+## Net-billing: cena energii wprowadzonej do sieci
+
+Prosument w systemie net-billing rozlicza energię wprowadzoną do sieci według
+rynkowej ceny giełdowej publikowanej przez PSE, a nie według stawki sprzedawcy
+za pobór. Projekt obsługuje dwa tryby tej ceny:
+
+- **RCE** (rynkowa cena energii) — okresy 15-minutowe, publikowana przez PSE
+  dzień przed dobą handlową w [API RCE](https://api.raporty.pse.pl/api/rce-pln);
+  dotyczy prosumentów rozliczanych w net-billingu od 1.07.2024;
+- **RCEm** (rynkowa miesięczna cena energii) — jedna cena na cały miesiąc,
+  publikowana na [stronie RCEm PSE](https://www.pse.pl/oire/rcem-rynkowa-miesieczna-cena-energii-elektrycznej);
+  dotyczy prosumentów sprzed tej daty, którzy pozostali przy rozliczeniu
+  miesięcznym.
+
+Wybierz tryb zgodny z Twoją umową z OSD — integracja nie rozlicza obu naraz.
+RCE i RCEm są cenami **netto**; nic się do nich nie dolicza — ani VAT, ani
+akcyza.
+
+### Współczynnik korygujący 1,23
+
+Od 1.02.2025 wartość depozytu prosumenckiego mnoży się przez ustawowy
+współczynnik korygujący **1,23** (ustawa o OZE). Projekt nie narzuca tej
+wartości: domyślnie stosuje `1.0`, czyli surową cenę PSE bez przeliczenia.
+Ustaw współczynnik jawnie, jeżeli dotyczy Twojej umowy:
+
+- w Home Assistant — pole **Współczynnik korygujący depozytu** w opcjach wpisu;
+- w usłudze Docker — pole `export_correction` profilu w `service/config.yaml`.
+
+### Ujemna RCE
+
+RCE bywa ujemna. Zgodnie z ustawą o OZE wartość rozliczeniowa jest wtedy równa
+zero, a depozyt prosumencki się nie zmniejsza. Surowa, ujemna cena PSE
+pozostaje widoczna — w atrybucie sensora „Cena RCE netto [PLN/kWh]” oraz w
+polu `raw_net` usługi Docker — ale nie wpływa na wartość rozliczeniową.
+
+### Publikacja RCEm
+
+RCEm za dany miesiąc jest publikowana 11. dnia miesiąca następnego. Do tego
+czasu obowiązuje ostatni znany miesiąc. PSE może później opublikować
+„skorygowaną RCEm”, która ma pierwszeństwo przed pierwotną wartością.
+
+### Konfiguracja w Home Assistant
+
+1. Otwórz **Ustawienia → Urządzenia i usługi → Polish Energy Prices →
+   Konfiguruj**.
+2. W polu **Rozliczenie energii wprowadzonej do sieci** wybierz `RCE` albo
+   `RCEm`, albo zostaw `Wyłączone`.
+3. W razie potrzeby ustaw **Współczynnik korygujący depozytu**.
+
+Integracja tworzy encję **Cena energii wprowadzonej do sieci** (`PLN/kWh`).
+Jej atrybuty:
+
+- „Cena netto [PLN/kWh]” — wartość rozliczeniowa, z ujemną RCE przyciętą do
+  zera;
+- „Cena RCE netto [PLN/kWh]” albo „Cena RCEm netto [PLN/kWh]” — surowa cena
+  PSE, także ujemna;
+- „Współczynnik korygujący”, „Podstawa rozliczenia”, „Okres rozliczeniowy”;
+- „VAT i akcyza” — zawsze „Nie dotyczy (ceny netto)”;
+- „Znane okresy” i „Ceny kolejnych okresów” — tylko w trybie RCE;
+- „Źródło ceny”, „Ostatnia kontrola”, „Ostatnia aktualizacja”, „Ostatnia
+  publikacja PSE”, „Ostatni błąd”.
+
+### Wpięcie w panel Energia
+
+1. W konfiguracji panelu Energia otwórz sekcję **Zwrot do sieci**.
+2. Wybierz **Użyj encji z bieżącą ceną**.
+3. Wskaż encję **Cena energii wprowadzonej do sieci**.
+
+### Usługa Docker: HTTP i MQTT
+
+Profil z ustawionym `export_settlement` udostępnia dodatkowo zasoby
+`/api/export` (wszystkie profile) i `/api/export/<profil>`:
+
+```bash
+curl http://localhost:8080/api/export/dom
+```
+
+Odpowiedź zawiera blok ceny eksportu oraz listę nadchodzących okresów (tylko
+w trybie RCE). Profil bez rozliczenia eksportu zwraca dla tego zasobu `404`.
+
+MQTT publikuje retained temat `<prefiks>/<profil>/export` z tym samym blokiem
+i listą okresów oraz skalary `export_price_net`, `export_raw_net`,
+`export_period` i `export_settlement`. Profile bez rozliczenia eksportu nie
+otrzymują tych tematów.
+
+Opłaty stałe, zwrot niewykorzystanych środków depozytu (do 20% wartości
+depozytu za dany miesiąc, jeżeli nie zostaną rozliczone w ciągu 12 miesięcy)
+ani salda miesięczne nie są w zakresie projektu.
+
 ## Co dokładnie zawiera cena
 
 Stan encji to koszt krańcowy:
@@ -377,7 +466,11 @@ Automatyzacja rozdziela źródła zgodnie z tym, kto ustala daną opłatę:
   oficjalny serwis dokumentów ENERGA, a dla PGE jego dokument operatora;
 - opłata OZE — tabela „Stawki opłaty OZE” w BIP URE;
 - opłata kogeneracyjna — rozporządzenie wyszukiwane przez oficjalne API ELI i
-  pobierane z Dziennika Ustaw.
+  pobierane z Dziennika Ustaw;
+- cena energii wprowadzonej do sieci w trybie RCE — [API RCE
+  PSE](https://api.raporty.pse.pl/api/rce-pln);
+- cena energii wprowadzonej do sieci w trybie RCEm — [strona RCEm
+  PSE](https://www.pse.pl/oire/rcem-rynkowa-miesieczna-cena-energii-elektrycznej).
 
 Taryfa PSE nie jest źródłem ceny dla klienta końcowego. Stawka jakościowa jest
 odczytywana z dokumentu OSD, który stosuje ją w rozliczeniach swoich odbiorców.

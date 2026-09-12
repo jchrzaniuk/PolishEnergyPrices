@@ -13,3 +13,5 @@ String PEP_Zrodlo "Źródło ceny [%s]" { channel="mqtt:topic:pepBroker:pepDom:s
 String PEP_StanZrodel "Stan źródeł [%s]" { channel="mqtt:topic:pepBroker:pepDom:sourceStatus" }
 Switch PEP_WaznaTaryfa "Ważna taryfa" { channel="mqtt:topic:pepBroker:pepDom:profileAvailable" }
 DateTime PEP_OstatnieObliczenie "Ostatnie obliczenie [%1$tF %1$tR]" { channel="mqtt:topic:pepBroker:pepDom:lastCalculated" }
+Number:EnergyPrice PEP_CenaEksportuNetto "Cena energii wprowadzonej netto [%.4f PLN/kWh]" { channel="mqtt:topic:pepBroker:pepDom:exportPriceNet" }
+String PEP_OkresEksportu "Okres rozliczeniowy eksportu [%s]" { channel="mqtt:topic:pepBroker:pepDom:exportPeriod" }

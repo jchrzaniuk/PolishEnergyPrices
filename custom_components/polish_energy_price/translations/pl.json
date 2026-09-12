@@ -26,10 +26,14 @@
         "description": "Ceny sprzedawcy z urzędu są sprawdzane w arkuszu URE co 12 godzin. G13s i G14dynamic korzystają z właściwych cenników TAURON. Strefy G14dynamic są pobierane automatycznie z Energetycznego Kompasu PSE.",
         "data": {
           "price_source": "Źródło ceny energii",
-          "external_statistics": "Utwórz koszty dla zewnętrznych statystyk zużycia"
+          "external_statistics": "Utwórz koszty dla zewnętrznych statystyk zużycia",
+          "export_settlement": "Rozliczenie energii wprowadzonej do sieci",
+          "export_correction": "Współczynnik korygujący depozytu"
         },
         "data_description": {
-          "external_statistics": "Włącz tylko wtedy, gdy licznik udostępnia statystyki bez encji (np. import danych godzinowych TAURON AMIplus). Zwykłe liczniki encjowe tego nie wymagają."
+          "external_statistics": "Włącz tylko wtedy, gdy licznik udostępnia statystyki bez encji (np. import danych godzinowych TAURON AMIplus). Zwykłe liczniki encjowe tego nie wymagają.",
+          "export_settlement": "RCE (rynkowa cena energii) to publikowana przez PSE cena netto dla 15-minutowych okresów, dzień przed dobą handlową. RCEm to jej miesięczny odpowiednik, publikowany 11. dnia kolejnego miesiąca. Wybierz „Wyłączone”, jeśli nie rozliczasz się w systemie net-billing.",
+          "export_correction": "Od 1.02.2025 wartość depozytu prosumenckiego mnoży się przez ustawowy współczynnik korygujący 1,23. Zostaw 1,0, aby zobaczyć surową cenę PSE bez przeliczenia."
         }
       },
       "custom_prices": {
@@ -86,7 +90,8 @@
     "error": {
       "invalid_hours": "Nieprawidłowe godziny. Użyj formatu 6-13,15-22; przedziały nie mogą się nakładać.",
       "duplicate_statistics": "Każda strefa musi wskazywać inną statystykę zużycia.",
-      "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia."
+      "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia.",
+      "invalid_export_correction": "Współczynnik korygujący musi być liczbą z zakresu 0,5–2,0."
     }
   },
   "options": {
@@ -98,7 +103,13 @@
           "price_source": "Źródło ceny energii",
           "meter_clock": "Sposób pracy zegara licznika",
           "day_hours": "Godziny strefy dziennej ENEA (np. 6-13,15-22)",
-          "external_statistics": "Utwórz koszty dla zewnętrznych statystyk zużycia"
+          "external_statistics": "Utwórz koszty dla zewnętrznych statystyk zużycia",
+          "export_settlement": "Rozliczenie energii wprowadzonej do sieci",
+          "export_correction": "Współczynnik korygujący depozytu"
+        },
+        "data_description": {
+          "export_settlement": "RCE (rynkowa cena energii) to publikowana przez PSE cena netto dla 15-minutowych okresów, dzień przed dobą handlową. RCEm to jej miesięczny odpowiednik, publikowany 11. dnia kolejnego miesiąca. Wybierz „Wyłączone”, jeśli nie rozliczasz się w systemie net-billing.",
+          "export_correction": "Od 1.02.2025 wartość depozytu prosumenckiego mnoży się przez ustawowy współczynnik korygujący 1,23. Zostaw 1,0, aby zobaczyć surową cenę PSE bez przeliczenia."
         }
       },
       "custom_prices": {
@@ -155,7 +166,17 @@
     "error": {
       "invalid_hours": "Nieprawidłowe godziny. Użyj formatu 6-13,15-22; przedziały nie mogą się nakładać.",
       "duplicate_statistics": "Każda strefa musi wskazywać inną statystykę zużycia.",
-      "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia."
+      "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia.",
+      "invalid_export_correction": "Współczynnik korygujący musi być liczbą z zakresu 0,5–2,0."
+    }
+  },
+  "selector": {
+    "export_settlement": {
+      "options": {
+        "off": "Wyłączone",
+        "rce": "RCE — cena za okres 15-minutowy",
+        "rcem": "RCEm — cena miesięczna"
+      }
     }
   },
   "entity": {

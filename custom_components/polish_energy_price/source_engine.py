@@ -25,6 +25,15 @@ from .official import (
     parse_tauron_g13s_prices,
     parse_tauron_g14dynamic_prices,
 )
+from .export_price import (
+    RCE_API_URL,
+    RCEM_PAGE,
+    build_rce_url,
+    parse_rce,
+    parse_rcem,
+    validate_export_prices,
+    validate_rcem,
+)
 from .kompas import (
     KOMPAS_API_URL,
     build_kompas_url,
@@ -40,6 +49,7 @@ MAX_PAGE_BYTES = 2_000_000
 MAX_WORKBOOK_BYTES = 5_000_000
 MAX_PDF_BYTES = 15_000_000
 MAX_KOMPAS_BYTES = 1_000_000
+MAX_RCE_BYTES = 1_000_000
 
 FetchBytes = Callable[..., Awaitable[bytes]]
 RunSync = Callable[..., Awaitable[Any]]
@@ -73,6 +83,17 @@ class EnergyPriceData:
     dynamic_publication_utc: str | None = None
     dynamic_publications: dict[str, str] | None = None
     dynamic_error: str | None = None
+    export_prices: dict[str, float] | None = None
+    export_publications: dict[str, str] | None = None
+    export_publication_utc: str | None = None
+    export_source_url: str | None = None
+    export_last_checked: str | None = None
+    export_last_updated: str | None = None
+    export_error: str | None = None
+    rcem_prices: dict[str, float] | None = None
+    rcem_source_url: str | None = None
+    rcem_last_checked: str | None = None
+    rcem_error: str | None = None
 
     @property
     def system_total(self) -> float:
@@ -104,6 +125,7 @@ class EnergyPriceSourceEngine:
         group: str,
         price_source: str,
         logger: logging.Logger | None = None,
+        export_settlement: str | None = None,
     ) -> None:
         self.operator = operator
         self.group = group
@@ -112,6 +134,11 @@ class EnergyPriceSourceEngine:
         self.use_tauron_g13s = price_source == "tauron_g13s"
         self.use_tauron_g14dynamic = price_source == "tauron_g14dynamic"
         self.logger = logger or logging.getLogger(__name__)
+        if export_settlement not in (None, "rce", "rcem"):
+            raise ValueError(
+                f"Nieznany tryb rozliczenia eksportu: {export_settlement}"
+            )
+        self.export_settlement = export_settlement
 
     def initial_data(self) -> EnergyPriceData:
         """Return the audited bundled prices used before the first refresh."""
@@ -127,6 +154,9 @@ class EnergyPriceSourceEngine:
             },
             dynamic_zones={} if self.tariff.dynamic_zone_source else None,
             dynamic_publications={} if self.tariff.dynamic_zone_source else None,
+            export_prices={} if self.export_settlement == "rce" else None,
+            export_publications={} if self.export_settlement == "rce" else None,
+            rcem_prices={} if self.export_settlement == "rcem" else None,
         )
 
     def data_from_cache(self, stored: object) -> EnergyPriceData:
@@ -206,6 +236,31 @@ class EnergyPriceSourceEngine:
                 else None
             ),
             dynamic_error=_optional_str(stored.get("dynamic_error")),
+            export_prices=(
+                validate_export_prices(stored.get("export_prices"))
+                if self.export_settlement == "rce"
+                else None
+            ),
+            export_publications=(
+                validate_dynamic_publications(stored.get("export_publications"))
+                if self.export_settlement == "rce"
+                else None
+            ),
+            export_publication_utc=_optional_str(
+                stored.get("export_publication_utc")
+            ),
+            export_source_url=_optional_str(stored.get("export_source_url")),
+            export_last_checked=_optional_str(stored.get("export_last_checked")),
+            export_last_updated=_optional_str(stored.get("export_last_updated")),
+            export_error=_optional_str(stored.get("export_error")),
+            rcem_prices=(
+                validate_rcem(stored.get("rcem_prices"))
+                if self.export_settlement == "rcem"
+                else None
+            ),
+            rcem_source_url=_optional_str(stored.get("rcem_source_url")),
+            rcem_last_checked=_optional_str(stored.get("rcem_last_checked")),
+            rcem_error=_optional_str(stored.get("rcem_error")),
         )
 
     def cache_payload(self, data: EnergyPriceData) -> dict[str, Any]:
@@ -268,7 +323,8 @@ class EnergyPriceSourceEngine:
             current = await self._refresh_official(
                 current, checked, fetch_bytes, run_sync, now
             )
-        return await self._refresh_dynamic(current, checked, fetch_bytes, now)
+        current = await self._refresh_dynamic(current, checked, fetch_bytes, now)
+        return await self._refresh_export(current, checked, fetch_bytes, now)
 
     async def _refresh_energy(
         self,
@@ -529,6 +585,168 @@ class EnergyPriceSourceEngine:
             dynamic_error="; ".join(errors) or None,
         )
 
+    async def _refresh_export(
+        self,
+        current: EnergyPriceData,
+        checked: str,
+        fetch_bytes: FetchBytes,
+        now: datetime,
+    ) -> EnergyPriceData:
+        """Odśwież cenę energii wprowadzonej do sieci (RCE albo RCEm)."""
+
+        if self.export_settlement is None:
+            return current
+        if self.export_settlement == "rce":
+            return await self._refresh_rce(current, checked, fetch_bytes, now)
+        return await self._refresh_rcem(current, checked, fetch_bytes, now)
+
+    async def _refresh_rce(
+        self,
+        current: EnergyPriceData,
+        checked: str,
+        fetch_bytes: FetchBytes,
+        now: datetime,
+    ) -> EnergyPriceData:
+        """Poll PSE for RCE revisions of the previous, current and next day.
+
+        Mirrors ``_refresh_dynamic``: each request returns the currently
+        active revision of one trading day, replacing it atomically only
+        when strictly newer than the stored one. D-1 is kept only to widen
+        the retention window. The throttle below only requires prices for
+        the current day (D) before skipping a refresh — D+1 is normally
+        published around 14:00 and is not required, so the hourly cadence
+        still catches its publication within an hour of it appearing.
+        """
+
+        local_today = now.astimezone(WARSAW).date()
+        keep_from = local_today - timedelta(days=1)
+        keep_until = local_today + timedelta(days=1)
+
+        has_recent_check = self._checked_within(
+            current.export_last_checked, now, timedelta(hours=1)
+        )
+        if has_recent_check and _day_has_prices(current.export_prices, local_today):
+            return current
+
+        prices = {
+            key: price
+            for key, price in (current.export_prices or {}).items()
+            if keep_from <= local_day_for_key(key) <= keep_until
+        }
+        publications = {
+            day: publication
+            for day, publication in (current.export_publications or {}).items()
+            if keep_from <= date.fromisoformat(day) <= keep_until
+        }
+
+        newest_publication = current.export_publication_utc
+        changed = False
+        errors: list[str] = []
+
+        for offset in range(-1, 2):
+            day = local_today + timedelta(days=offset)
+            day_iso = day.isoformat()
+            url = build_rce_url(day)
+            try:
+                snapshot = parse_rce(await fetch_bytes(url, MAX_RCE_BYTES))
+            except Exception as err:  # noqa: BLE001 - preserve cached revision
+                errors.append(f"{day_iso}: {err}")
+                continue
+            if not snapshot.prices:
+                # Not yet published for this trading day; retried next time.
+                continue
+
+            day_keys = {key for key in prices if local_day_for_key(key) == day}
+            if day_keys and not _publication_is_newer(
+                snapshot.publication_utc, publications.get(day_iso)
+            ):
+                continue  # no newer revision than the one already applied
+
+            replacement = set(snapshot.prices)
+            if day_keys != replacement or any(
+                prices.get(key) != price for key, price in snapshot.prices.items()
+            ):
+                changed = True
+            for key in day_keys - replacement:
+                prices.pop(key, None)
+            prices.update(snapshot.prices)
+            if snapshot.publication_utc:
+                publications[day_iso] = snapshot.publication_utc
+                if (
+                    newest_publication is None
+                    or snapshot.publication_utc > newest_publication
+                ):
+                    newest_publication = snapshot.publication_utc
+
+        if not _day_has_prices(prices, local_today):
+            errors.append(f"brak cen RCE dla bieżącej doby {local_today.isoformat()}")
+        return replace(
+            current,
+            export_prices=prices,
+            export_publications=publications,
+            export_source_url=RCE_API_URL,
+            export_last_checked=checked,
+            export_last_updated=(
+                checked if changed else current.export_last_updated
+            ),
+            export_publication_utc=newest_publication,
+            export_error="; ".join(errors) or None,
+        )
+
+    async def _refresh_rcem(
+        self,
+        current: EnergyPriceData,
+        checked: str,
+        fetch_bytes: FetchBytes,
+        now: datetime,
+    ) -> EnergyPriceData:
+        if self._checked_within(
+            current.rcem_last_checked, now, timedelta(hours=12)
+        ):
+            return current
+
+        local_now = now.astimezone(WARSAW)
+        years = {local_now.year}
+        if local_now.month == 1:
+            # The December RCEm is only published on 11 January.
+            years.add(local_now.year - 1)
+
+        try:
+            page = (await fetch_bytes(RCEM_PAGE, MAX_PAGE_BYTES)).decode(
+                "utf-8", errors="replace"
+            )
+            # Early January: the current year's table does not exist yet on
+            # the page (its first price appears only on 11 February), so
+            # only last year's table (with the December price) succeeds.
+            # A missing single year must not abort the whole refresh; only
+            # raise once every requested year has failed to parse.
+            parsed: dict[str, float] = {}
+            failures: list[str] = []
+            for year in sorted(years, reverse=True):
+                try:
+                    parsed.update(parse_rcem(page, year))
+                except ValueError as err:
+                    failures.append(f"{year}: {err}")
+            if not parsed:
+                raise ValueError("; ".join(failures))
+            merged = {**(current.rcem_prices or {}), **parsed}
+            kept = sorted(merged, reverse=True)[:14]
+            return replace(
+                current,
+                rcem_prices={key: merged[key] for key in kept},
+                rcem_source_url=RCEM_PAGE,
+                rcem_last_checked=checked,
+                rcem_error=None,
+            )
+        except Exception as err:  # noqa: BLE001 - retain the last known prices
+            self.logger.warning("RCEm price refresh failed: %s", err)
+            return replace(
+                current,
+                rcem_source_url=RCEM_PAGE,
+                rcem_last_checked=checked,
+                rcem_error=str(err),
+            )
+
     async def _refresh_official(
         self,
         current: EnergyPriceData,
@@ -664,6 +882,12 @@ class EnergyPriceSourceEngine:
 
 def _optional_str(value: object) -> str | None:
     return None if value is None else str(value)
+
+
+def _day_has_prices(prices: Mapping[str, float] | None, day: date) -> bool:
+    """Return whether any RCE key falls on the given Warsaw calendar day."""
+
+    return any(local_day_for_key(key) == day for key in (prices or {}))
 
 
 def _publication_is_newer(candidate: str | None, stored: str | None) -> bool:

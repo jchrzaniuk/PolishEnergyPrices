@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
+from custom_components.polish_energy_price.export_price import rce_period_key
 from custom_components.polish_energy_price.tariff import WARSAW
 from service.config import load_config
 from service.runtime import (
@@ -247,6 +248,165 @@ data_dir: {directory}
                     )
                 )
             self.assertEqual(1, refresh_mock.await_count)
+
+    def test_export_profile_snapshot_contains_export_block(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    export_settlement: rce
+    export_correction: 1.23
+mqtt:
+  enabled: false
+data_dir: {directory}
+"""
+            path = Path(directory) / "config.yaml"
+            path.write_text(content, encoding="utf-8")
+            config = load_config(path)
+            runtime = ProfileRuntime(config.profiles[0], Path(directory))
+            now = datetime(2026, 7, 31, 12, 0, tzinfo=WARSAW)
+            runtime.data.export_prices = {rce_period_key(now): 0.58993}
+            result = runtime.snapshot(now)
+
+        export = result["export"]
+        self.assertEqual("rce", export["settlement"])
+        self.assertTrue(export["available"])
+        self.assertEqual(0.58993, export["raw_net"])
+        self.assertEqual(round(0.58993 * 1.23, 6), export["price_net"])
+        self.assertEqual(1.23, export["correction"])
+        self.assertEqual("PLN/kWh", export["unit"])
+        self.assertIsNone(export["error"])
+        self.assertIsNone(result["errors"]["export"])
+
+    def test_profile_without_export_snapshot_has_no_export_block(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = self._service_config(directory, profiles=1)
+            runtime = ProfileRuntime(config.profiles[0], Path(directory))
+            result = runtime.snapshot(datetime(2026, 8, 4, 12, 15, tzinfo=WARSAW))
+
+        self.assertNotIn("export", result)
+        self.assertIsNone(result["errors"]["export"])
+
+    def test_export_profile_without_current_price_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    export_settlement: rce
+mqtt:
+  enabled: false
+data_dir: {directory}
+"""
+            path = Path(directory) / "config.yaml"
+            path.write_text(content, encoding="utf-8")
+            config = load_config(path)
+            runtime = ProfileRuntime(config.profiles[0], Path(directory))
+            result = runtime.snapshot(datetime(2026, 7, 31, 12, 0, tzinfo=WARSAW))
+
+        export = result["export"]
+        self.assertFalse(export["available"])
+        self.assertIsNone(export["price_net"])
+
+    def test_export_http_endpoints_and_missing_profile_404(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    export_settlement: rce
+  domek:
+    operator: pge
+    tariff: G11
+    price_source: custom
+    custom_prices:
+      calodobowa: 0.7500
+mqtt:
+  enabled: false
+data_dir: {directory}
+"""
+            path = Path(directory) / "config.yaml"
+            path.write_text(content, encoding="utf-8")
+            service = PriceService(load_config(path))
+            now = datetime(2026, 8, 4, 12, 15, tzinfo=WARSAW)
+            service.profiles["dom"].data.export_prices = {rce_period_key(now): 0.5}
+            service.recalculate(now)
+            server, thread, base_url = self._http_server(service)
+            try:
+                with urlopen(f"{base_url}/api/export/dom?hours=2") as response:
+                    payload = json.load(response)
+                self.assertTrue(payload["available"])
+                self.assertEqual(1, len(payload["periods"]))
+
+                with urlopen(f"{base_url}/api/export") as response:
+                    all_profiles = json.load(response)
+                self.assertEqual({"dom"}, set(all_profiles["profiles"]))
+
+                with self.assertRaises(HTTPError) as raised:
+                    urlopen(f"{base_url}/api/export/domek")
+                self.assertEqual(404, raised.exception.code)
+
+                with self.assertRaises(HTTPError) as raised:
+                    urlopen(f"{base_url}/api/export/missing")
+                self.assertEqual(404, raised.exception.code)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_mqtt_publishes_export_topics_only_for_export_profiles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            content = f"""
+profiles:
+  dom:
+    operator: tauron
+    tariff: G11
+    export_settlement: rce
+  domek:
+    operator: pge
+    tariff: G11
+    price_source: custom
+    custom_prices:
+      calodobowa: 0.7500
+mqtt:
+  enabled: false
+data_dir: {directory}
+"""
+            path = Path(directory) / "config.yaml"
+            path.write_text(content, encoding="utf-8")
+            service = PriceService(load_config(path))
+            now = datetime(2026, 8, 4, 12, 15, tzinfo=WARSAW)
+            service.profiles["dom"].data.export_prices = {rce_period_key(now): 0.5}
+            service.recalculate(now)
+            publisher = MqttPublisher(
+                service.config.mqtt,
+                service.snapshots,
+                service.forecasts,
+                service.export_snapshots,
+            )
+            publisher._client = MagicMock()
+            publisher._connected = True
+            publisher.publish_all()
+
+        export_topics = {
+            call.args[0]
+            for call in publisher._client.publish.call_args_list
+            if "/export" in call.args[0]
+        }
+        self.assertTrue(
+            {
+                "polish_energy_prices/dom/export",
+                "polish_energy_prices/dom/export_price_net",
+                "polish_energy_prices/dom/export_raw_net",
+                "polish_energy_prices/dom/export_period",
+                "polish_energy_prices/dom/export_settlement",
+            }.issubset(export_topics)
+        )
+        self.assertFalse(any(topic.startswith("polish_energy_prices/domek/export") for topic in export_topics))
 
     @staticmethod
     def _service_config(directory: str, *, profiles: int):

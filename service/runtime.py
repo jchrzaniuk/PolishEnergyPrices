@@ -27,6 +27,10 @@ from custom_components.polish_energy_price.forecast import (
     forecast_to_dict,
     resize_forecast,
 )
+from custom_components.polish_energy_price.export_price import (
+    export_price_at,
+    upcoming_export_periods,
+)
 from custom_components.polish_energy_price.source_engine import EnergyPriceSourceEngine
 from custom_components.polish_energy_price.tariff import (
     DynamicZoneUnavailable,
@@ -75,7 +79,13 @@ class ProfileRuntime:
     def __init__(self, config: ProfileConfig, data_dir: Path) -> None:
         self.config = config
         self.engine = EnergyPriceSourceEngine(
-            config.operator, config.tariff, config.price_source, _LOGGER
+            config.operator,
+            config.tariff,
+            config.price_source,
+            _LOGGER,
+            export_settlement=(
+                None if config.export_settlement == "off" else config.export_settlement
+            ),
         )
         self.cache_path = data_dir / f"{config.profile_id}.json"
         self.data = self.engine.initial_data()
@@ -118,6 +128,7 @@ class ProfileRuntime:
             )
 
     def snapshot(self, now: datetime) -> dict[str, Any]:
+        export_block = self._export_block(now)
         custom = (
             self.config.custom_prices
             if self.config.price_source == "custom"
@@ -135,7 +146,7 @@ class ProfileRuntime:
                 dynamic_zones=self.data.dynamic_zones,
             )
         except DynamicZoneUnavailable as err:
-            return {
+            unavailable: dict[str, Any] = {
                 "available": False,
                 "price_gross": None,
                 "unit": "PLN/kWh",
@@ -147,6 +158,7 @@ class ProfileRuntime:
                     "energy": self.data.error,
                     "official": self.data.official_error,
                     "dynamic": self.data.dynamic_error or str(err),
+                    "export": export_block["error"] if export_block else None,
                 },
                 "sources": {
                     "energy": self.data.source_url,
@@ -154,6 +166,9 @@ class ProfileRuntime:
                     "dynamic_zones": self.data.dynamic_source_url,
                 },
             }
+            if export_block is not None:
+                unavailable["export"] = export_block
+            return unavailable
         system_rates = self.data.system_net or {}
         network_net = float(
             (self.data.distribution_net or self.engine.tariff.distribution_net)[
@@ -178,7 +193,7 @@ class ProfileRuntime:
             source_status = "cache_or_warning"
         if not valid:
             source_status = "expired"
-        return {
+        snapshot: dict[str, Any] = {
             "available": valid,
             "price_gross": round(result.total, 4) if valid else None,
             "unit": "PLN/kWh",
@@ -209,6 +224,7 @@ class ProfileRuntime:
                 "energy": self.data.error,
                 "official": self.data.official_error,
                 "dynamic": self.data.dynamic_error,
+                "export": export_block["error"] if export_block else None,
             },
             "sources": {
                 "energy": self.data.source_url,
@@ -219,6 +235,9 @@ class ProfileRuntime:
                 "dynamic_zones": self.data.dynamic_source_url,
             },
         }
+        if export_block is not None:
+            snapshot["export"] = export_block
+        return snapshot
 
     def forecast(
         self, now: datetime, hours: int = DEFAULT_FORECAST_HOURS
@@ -240,6 +259,68 @@ class ProfileRuntime:
             hours=hours,
         )
 
+    def _export_block(self, now: datetime) -> dict[str, Any] | None:
+        """Return the net-billing export price for ``now``.
+
+        Returns ``None`` when the profile has no export settlement
+        configured, so callers can skip the block entirely instead of
+        publishing an empty one.
+        """
+
+        settlement = self.config.export_settlement
+        if settlement == "off":
+            return None
+        is_rce = settlement == "rce"
+        price = export_price_at(
+            now,
+            settlement=settlement,
+            rce_prices=self.data.export_prices,
+            rcem_prices=self.data.rcem_prices,
+            correction=self.config.export_correction,
+        )
+        return {
+            "settlement": settlement,
+            "period": (
+                datetime.fromisoformat(price.period).astimezone(WARSAW).isoformat()
+                if price and is_rce
+                else (price.period if price else None)
+            ),
+            "price_net": price.value if price else None,
+            "raw_net": price.raw if price else None,
+            "correction": self.config.export_correction,
+            "unit": "PLN/kWh",
+            "available": price is not None,
+            "source": (
+                self.data.export_source_url if is_rce else self.data.rcem_source_url
+            ),
+            "last_checked": (
+                self.data.export_last_checked if is_rce else self.data.rcem_last_checked
+            ),
+            "last_updated": self.data.export_last_updated if is_rce else None,
+            "publication": self.data.export_publication_utc if is_rce else None,
+            "error": self.data.export_error if is_rce else self.data.rcem_error,
+        }
+
+    def export_periods(self, now: datetime, hours: int) -> list[dict[str, Any]]:
+        """Return upcoming RCE settlement periods; empty outside RCE mode."""
+
+        if self.config.export_settlement != "rce":
+            return []
+        return upcoming_export_periods(
+            self.data.export_prices or {},
+            now,
+            correction=self.config.export_correction,
+            limit=hours * 4,
+        )
+
+    def export_snapshot(self, now: datetime, hours: int) -> dict[str, Any] | None:
+        """Return the export block plus upcoming periods for the HTTP API."""
+
+        block = self._export_block(now)
+        if block is None:
+            return None
+        return {**block, "periods": self.export_periods(now, hours)}
+
 
 class MqttPublisher:
     """Publish retained service snapshots through one MQTT connection."""
@@ -249,10 +330,12 @@ class MqttPublisher:
         config: MqttConfig,
         snapshots: Callable[[], dict[str, dict[str, Any]]],
         forecasts: Callable[[], dict[str, PriceForecast]],
+        exports: Callable[[], dict[str, dict[str, Any]]] | None = None,
     ) -> None:
         self.config = config
         self._snapshots = snapshots
         self._forecasts = forecasts
+        self._exports = exports or (lambda: {})
         self._connected = False
         self._client: mqtt.Client | None = None
 
@@ -309,14 +392,21 @@ class MqttPublisher:
         if not self._connected:
             return
         forecasts = self._forecasts()
+        exports = self._exports()
         for profile_id, snapshot in self._snapshots().items():
-            self.publish(profile_id, snapshot, forecasts.get(profile_id))
+            self.publish(
+                profile_id,
+                snapshot,
+                forecasts.get(profile_id),
+                exports.get(profile_id),
+            )
 
     def publish(
         self,
         profile_id: str,
         snapshot: dict[str, Any],
         forecast: PriceForecast | None = None,
+        export: dict[str, Any] | None = None,
     ) -> None:
         client = self._client
         if client is None or not self._connected:
@@ -329,6 +419,22 @@ class MqttPublisher:
                 json.dumps(forecast_to_dict(forecast), ensure_ascii=False),
                 retain=True,
             )
+        if export is not None:
+            self._publish(
+                f"{base}/export",
+                json.dumps(export, ensure_ascii=False),
+                retain=True,
+            )
+            price_net = export["price_net"]
+            raw_net = export["raw_net"]
+            self._publish(
+                f"{base}/export_price_net", "" if price_net is None else str(price_net)
+            )
+            self._publish(
+                f"{base}/export_raw_net", "" if raw_net is None else str(raw_net)
+            )
+            self._publish(f"{base}/export_period", export["period"] or "")
+            self._publish(f"{base}/export_settlement", export["settlement"])
         scalar_keys = (
             "price_gross",
             "energy_gross",
@@ -412,10 +518,13 @@ class PriceService:
         self._snapshot_lock = Lock()
         self._snapshots: dict[str, dict[str, Any]] = {}
         self._forecasts: dict[str, PriceForecast] = {}
+        self._exports: dict[str, dict[str, Any]] = {}
         self._stop = asyncio.Event()
         self._http: ThreadingHTTPServer | None = None
         self._http_thread: Thread | None = None
-        self.mqtt = MqttPublisher(config.mqtt, self.snapshots, self.forecasts)
+        self.mqtt = MqttPublisher(
+            config.mqtt, self.snapshots, self.forecasts, self.export_snapshots
+        )
 
     async def run(self) -> None:
         for profile in self.profiles.values():
@@ -472,12 +581,17 @@ class PriceService:
         picked up promptly; every other profile keeps the configured
         ``refresh_interval_hours`` so URE and operator documents are not
         downloaded needlessly often just because a dynamic profile shares
-        the same service instance.
+        the same service instance. A profile with net-billing export enabled
+        is additionally capped at hourly refresh, so its RCE/RCEm prices do
+        not go a whole ``refresh_interval_hours`` window without an update.
         """
 
         if profile.engine.tariff.dynamic_zone_source:
             return _DYNAMIC_PROFILE_REFRESH_SECONDS
-        return self.config.refresh_interval_hours * 3600
+        interval = self.config.refresh_interval_hours * 3600
+        if profile.config.export_settlement != "off":
+            interval = min(interval, 3600)
+        return interval
 
     async def refresh_all(self, now: datetime | None = None) -> None:
         """Refresh every configured profile; used at startup and by tests."""
@@ -504,9 +618,15 @@ class PriceService:
             profile_id: profile.forecast(calculated_at, MAX_FORECAST_HOURS)
             for profile_id, profile in self.profiles.items()
         }
+        exports = {}
+        for profile_id, profile in self.profiles.items():
+            block = profile.export_snapshot(calculated_at, MAX_FORECAST_HOURS)
+            if block is not None:
+                exports[profile_id] = block
         with self._snapshot_lock:
             self._snapshots = snapshots
             self._forecasts = forecasts
+            self._exports = exports
 
     def snapshots(self) -> dict[str, dict[str, Any]]:
         with self._snapshot_lock:
@@ -521,6 +641,23 @@ class PriceService:
             return {
                 profile_id: resize_forecast(forecast, hours)
                 for profile_id, forecast in self._forecasts.items()
+            }
+
+    def export_snapshots(
+        self, hours: int = DEFAULT_FORECAST_HOURS
+    ) -> dict[str, dict[str, Any]]:
+        """Return one coherent view of the export block and periods per profile.
+
+        Mirrors ``forecasts()``: profiles are computed once in ``recalculate``
+        at the full horizon and the periods list is trimmed here to the
+        requested ``hours`` without recomputing any price.
+        """
+
+        limit = hours * 4
+        with self._snapshot_lock:
+            return {
+                profile_id: {**block, "periods": block["periods"][:limit]}
+                for profile_id, block in self._exports.items()
             }
 
     def _start_http(self) -> None:
@@ -608,6 +745,31 @@ def _handler_for(service: PriceService) -> type[BaseHTTPRequestHandler]:
                         HTTPStatus.NOT_FOUND,
                         {"error": "Nie znaleziono profilu"},
                     )
+                return
+            export_prefix = "/api/export/"
+            if path == "/api/export" or path.startswith(export_prefix):
+                try:
+                    hours = _forecast_hours(parsed.query)
+                except ValueError as err:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(err)})
+                    return
+                exports = service.export_snapshots(hours)
+                if path == "/api/export":
+                    self._json(HTTPStatus.OK, {"profiles": exports})
+                    return
+                profile_id = path[len(export_prefix) :]
+                if profile_id not in snapshots:
+                    self._json(
+                        HTTPStatus.NOT_FOUND,
+                        {"error": "Nie znaleziono profilu"},
+                    )
+                elif profile_id not in exports:
+                    self._json(
+                        HTTPStatus.NOT_FOUND,
+                        {"error": "Profil nie ma rozliczenia energii wprowadzonej"},
+                    )
+                else:
+                    self._json(HTTPStatus.OK, exports[profile_id])
                 return
             prefix = "/api/price/"
             if path.startswith(prefix):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import json
 import unittest
 
@@ -499,6 +499,273 @@ class SourceEngineTests(unittest.TestCase):
         forecast = build_forecast(tariff, refreshed, later, hours=1)
         self.assertEqual("cache_or_warning", forecast.source_status)
 
+    def test_export_rce_cache_round_trip(self) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rce"
+        )
+        original = engine.initial_data()
+        self.assertEqual({}, original.export_prices)
+        self.assertEqual({}, original.export_publications)
+
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+        fetch = self._fetch_map(
+            {
+                "2026-09-10": self._rce_payload(date(2026, 9, 10), 700.0),
+                "2026-09-11": self._rce_payload(date(2026, 9, 11), 725.66),
+                "2026-09-12": self._rce_payload(date(2026, 9, 12), 800.0),
+            }
+        )
+        refreshed = asyncio.run(
+            engine._refresh_rce(original, now.isoformat(), fetch, now)
+        )
+        self.assertTrue(refreshed.export_prices)
+        payload = engine.cache_payload(refreshed)
+        restored = engine.data_from_cache(payload)
+        self.assertEqual(refreshed.export_prices, restored.export_prices)
+        self.assertEqual(
+            refreshed.export_publications, restored.export_publications
+        )
+
+    def test_export_rcem_cache_round_trip(self) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rcem"
+        )
+        original = engine.initial_data()
+        self.assertEqual({}, original.rcem_prices)
+
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+
+        async def fetch(*_args, **_kwargs):
+            return RCEM_HTML_FIXTURE.encode()
+
+        refreshed = asyncio.run(
+            engine._refresh_rcem(original, now.isoformat(), fetch, now)
+        )
+        self.assertTrue(refreshed.rcem_prices)
+        payload = engine.cache_payload(refreshed)
+        restored = engine.data_from_cache(payload)
+        self.assertEqual(refreshed.rcem_prices, restored.rcem_prices)
+
+    def test_export_rcem_january_missing_current_year_table_is_not_an_error(
+        self,
+    ) -> None:
+        # Early January: only last year's table exists yet (this year's
+        # first price is published 11 February), so the December price is
+        # still picked up and this must not be reported as an error.
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rcem"
+        )
+        current = engine.initial_data()
+        now = datetime(2027, 1, 15, 12, tzinfo=WARSAW)
+
+        async def fetch(*_args, **_kwargs):
+            return RCEM_HTML_DECEMBER_ONLY.encode()
+
+        refreshed = asyncio.run(
+            engine._refresh_rcem(current, now.isoformat(), fetch, now)
+        )
+        self.assertEqual({"2026-12": 0.3}, refreshed.rcem_prices)
+        self.assertIsNone(refreshed.rcem_error)
+
+    def test_export_rcem_january_missing_both_years_sets_error(self) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rcem"
+        )
+        current = engine.initial_data()
+        now = datetime(2027, 1, 15, 12, tzinfo=WARSAW)
+
+        async def fetch(*_args, **_kwargs):
+            return b"<html><body>nowy uklad strony bez tabel RCEm</body></html>"
+
+        refreshed = asyncio.run(
+            engine._refresh_rcem(current, now.isoformat(), fetch, now)
+        )
+        self.assertEqual({}, refreshed.rcem_prices)
+        self.assertIn("2027", refreshed.rcem_error or "")
+        self.assertIn("2026", refreshed.rcem_error or "")
+
+    def test_export_rce_newer_publication_updates_price_and_last_updated(
+        self,
+    ) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rce"
+        )
+        current = engine.initial_data()
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+        first_fetch = self._fetch_map(
+            {
+                "2026-09-10": self._rce_payload(
+                    date(2026, 9, 10), 700.0, publication="2026-09-09 12:00:00.000"
+                ),
+                "2026-09-11": self._rce_payload(
+                    date(2026, 9, 11), 725.66, publication="2026-09-10 12:17:22.709"
+                ),
+                "2026-09-12": self._rce_payload(
+                    date(2026, 9, 12), 800.0, publication="2026-09-10 14:00:00.000"
+                ),
+            }
+        )
+        first = asyncio.run(
+            engine._refresh_rce(current, now.isoformat(), first_fetch, now)
+        )
+        self.assertEqual(now.isoformat(), first.export_last_updated)
+
+        # Past the 1h throttle window, so a real fetch is attempted again.
+        later = datetime(2026, 9, 11, 13, 30, tzinfo=WARSAW)
+        second_fetch = self._fetch_map(
+            {
+                "2026-09-10": self._rce_payload(
+                    date(2026, 9, 10), 700.0, publication="2026-09-09 12:00:00.000"
+                ),
+                "2026-09-11": self._rce_payload(
+                    date(2026, 9, 11), 900.0, publication="2026-09-11 13:00:00.000"
+                ),
+                "2026-09-12": self._rce_payload(
+                    date(2026, 9, 12), 800.0, publication="2026-09-10 14:00:00.000"
+                ),
+            }
+        )
+        second = asyncio.run(
+            engine._refresh_rce(first, later.isoformat(), second_fetch, later)
+        )
+        self.assertEqual(later.isoformat(), second.export_last_updated)
+        self.assertEqual(
+            0.9, second.export_prices["2026-09-11T12:00:00+00:00"]
+        )
+
+    def test_export_rce_same_publication_keeps_last_updated(self) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rce"
+        )
+        current = engine.initial_data()
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+        fetch = self._fetch_map(
+            {
+                "2026-09-10": self._rce_payload(
+                    date(2026, 9, 10), 700.0, publication="2026-09-09 12:00:00.000"
+                ),
+                "2026-09-11": self._rce_payload(
+                    date(2026, 9, 11), 725.66, publication="2026-09-10 12:17:22.709"
+                ),
+                "2026-09-12": self._rce_payload(
+                    date(2026, 9, 12), 800.0, publication="2026-09-10 14:00:00.000"
+                ),
+            }
+        )
+        first = asyncio.run(
+            engine._refresh_rce(current, now.isoformat(), fetch, now)
+        )
+
+        later = datetime(2026, 9, 11, 13, 30, tzinfo=WARSAW)
+        second = asyncio.run(
+            engine._refresh_rce(first, later.isoformat(), fetch, later)
+        )
+        self.assertEqual(first.export_last_updated, second.export_last_updated)
+        self.assertEqual(later.isoformat(), second.export_last_checked)
+        self.assertEqual(first.export_prices, second.export_prices)
+
+    def test_export_rce_fetch_error_preserves_previous_prices(self) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rce"
+        )
+        current = engine.initial_data()
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+        fetch = self._fetch_map(
+            {
+                "2026-09-10": self._rce_payload(date(2026, 9, 10), 700.0),
+                "2026-09-11": self._rce_payload(date(2026, 9, 11), 725.66),
+                "2026-09-12": self._rce_payload(date(2026, 9, 12), 800.0),
+            }
+        )
+        first = asyncio.run(
+            engine._refresh_rce(current, now.isoformat(), fetch, now)
+        )
+
+        later = datetime(2026, 9, 11, 14, 0, tzinfo=WARSAW)
+        failing_fetch = self._fetch_map(
+            {
+                "2026-09-10": self._rce_payload(date(2026, 9, 10), 700.0),
+                "2026-09-11": TimeoutError("brak odpowiedzi"),
+                "2026-09-12": self._rce_payload(date(2026, 9, 12), 800.0),
+            }
+        )
+        second = asyncio.run(
+            engine._refresh_rce(first, later.isoformat(), failing_fetch, later)
+        )
+        self.assertIn("brak odpowiedzi", second.export_error or "")
+        self.assertEqual(first.export_prices, second.export_prices)
+
+    def test_export_rce_throttle_skips_without_next_day_prices(self) -> None:
+        # D+1 is normally not published before ~14:00; the throttle must not
+        # require it, or a 15-minute refresh cadence would call PSE far more
+        # often than the hourly cap intends while waiting for it.
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rce"
+        )
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+        current = replace(
+            engine.initial_data(),
+            export_prices={"2026-09-11T12:00:00+00:00": 0.7},
+            export_last_checked=(now - timedelta(minutes=30)).isoformat(),
+        )
+
+        async def fetch_must_not_be_called(*_args, **_kwargs):
+            raise AssertionError(
+                "fetch nie powinien zostać wywołany w oknie throttle'a 1h"
+            )
+
+        result = asyncio.run(
+            engine._refresh_rce(
+                current, now.isoformat(), fetch_must_not_be_called, now
+            )
+        )
+        self.assertIs(current, result)
+
+    def test_export_rce_missing_current_day_forces_fetch_despite_fresh_check(
+        self,
+    ) -> None:
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rce"
+        )
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+        # export_last_checked is fresh (30 minutes ago), but there are no
+        # prices at all for the current day, so the throttle must not skip.
+        current = replace(
+            engine.initial_data(),
+            export_prices={},
+            export_last_checked=(now - timedelta(minutes=30)).isoformat(),
+        )
+        fetch = self._fetch_map(
+            {
+                "2026-09-10": self._rce_payload(date(2026, 9, 10), 700.0),
+                "2026-09-11": self._rce_payload(date(2026, 9, 11), 725.66),
+                "2026-09-12": self._rce_payload(date(2026, 9, 12), 800.0),
+            }
+        )
+        result = asyncio.run(
+            engine._refresh_rce(current, now.isoformat(), fetch, now)
+        )
+        self.assertEqual(now.isoformat(), result.export_last_checked)
+        self.assertEqual(
+            0.72566, result.export_prices["2026-09-11T12:00:00+00:00"]
+        )
+
+    def test_no_export_settlement_never_calls_pse_for_rce(self) -> None:
+        engine = EnergyPriceSourceEngine("tauron", "G11", "regulated")
+        current = engine.initial_data()
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+        calls: list[str] = []
+
+        async def counting_fetch(url, *_args, **_kwargs):
+            calls.append(url)
+            raise AssertionError("fetch nie powinien być wywołany")
+
+        result = asyncio.run(
+            engine._refresh_export(current, now.isoformat(), counting_fetch, now)
+        )
+        self.assertIs(current, result)
+        self.assertEqual([], calls)
+
     @staticmethod
     def _zones_for_day(data, year: int, month: int, day: int) -> set[str]:
         target = date(year, month, day)
@@ -536,6 +803,56 @@ class SourceEngineTests(unittest.TestCase):
                 ]
             }
         ).encode()
+
+    @staticmethod
+    def _rce_payload(
+        day: date, rce_pln: float, *, publication: str = "2026-09-09 12:00:00.000"
+    ) -> bytes:
+        # A single midday 15-minute row is enough to mark the day as known;
+        # noon UTC always falls on the same Warsaw calendar day as ``day``.
+        return json.dumps(
+            {
+                "value": [
+                    {
+                        "dtime_utc": f"{day.isoformat()} 12:15:00",
+                        "period_utc": "12:00 - 12:15",
+                        "rce_pln": rce_pln,
+                        "publication_ts_utc": publication,
+                    }
+                ]
+            }
+        ).encode()
+
+
+# Tabela przycięta z prawdziwej strony RCEm PSE, wystarczająca do sprawdzenia
+# round-tripu cache dla trybu "rcem" (patrz też tests/test_export_price.py).
+RCEM_HTML_FIXTURE = """
+<table><tbody>
+<tr><th align="center" colspan="4"><strong>2026</strong></th></tr>
+<tr><td bgcolor="#eeeeee">&nbsp;</td><td align="center">cena [zł/MWh]</td>
+<td align="center">data publikacji</td><td align="center">różnica</td></tr>
+<tr><td bgcolor="#eeeeee" colspan="4"><strong>styczeń</strong></td></tr>
+<tr><td nowrap="nowrap">RCEm</td><td align="right">551,96</td>
+<td align="center">11.02.2026</td><td align="center">-</td></tr>
+<tr><td nowrap="nowrap">skorygowana RCEm*</td><td align="right">-</td>
+<td align="center">-</td><td align="center">-</td></tr>
+</tbody></table>
+"""
+
+# Only last year's table exists, as on the real page in early January
+# before the current year's first table (11 February) is published.
+RCEM_HTML_DECEMBER_ONLY = """
+<table><tbody>
+<tr><th align="center" colspan="4"><strong>2026</strong></th></tr>
+<tr><td bgcolor="#eeeeee">&nbsp;</td><td align="center">cena [zł/MWh]</td>
+<td align="center">data publikacji</td><td align="center">różnica</td></tr>
+<tr><td bgcolor="#eeeeee" colspan="4"><b>grudzień</b></td></tr>
+<tr><td nowrap="nowrap">RCEm</td><td align="right">300,00</td>
+<td align="center">11.01.2027</td><td align="center">-</td></tr>
+<tr><td nowrap="nowrap">skorygowana RCEm*</td><td align="right">-</td>
+<td align="center">-</td><td align="center">-</td></tr>
+</tbody></table>
+"""
 
 
 if __name__ == "__main__":

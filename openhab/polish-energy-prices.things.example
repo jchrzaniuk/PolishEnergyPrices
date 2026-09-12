@@ -27,4 +27,6 @@ Thing mqtt:topic:pepDom "Polish Energy Prices, dom" (mqtt:broker:pepBroker) [
     Type string   : sourceStatus      "Stan źródeł"               [ stateTopic="polish_energy_prices/dom/source_status" ]
     Type switch   : profileAvailable  "Ważna taryfa"              [ stateTopic="polish_energy_prices/dom/availability", on="online", off="offline" ]
     Type datetime : lastCalculated    "Ostatnie obliczenie"       [ stateTopic="polish_energy_prices/dom/last_calculated" ]
+    Type number   : exportPriceNet   "Cena energii wprowadzonej netto" [ stateTopic="polish_energy_prices/dom/export_price_net", unit="PLN/kWh" ]
+    Type string   : exportPeriod     "Okres rozliczeniowy eksportu"     [ stateTopic="polish_energy_prices/dom/export_period" ]
 }

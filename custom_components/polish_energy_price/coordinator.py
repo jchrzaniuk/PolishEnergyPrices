@@ -16,10 +16,12 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_EXPORT_SETTLEMENT,
     CONF_OPERATOR,
     CONF_PRICE_SOURCE,
     CONF_TARIFF,
     DOMAIN,
+    EXPORT_SETTLEMENT_OFF,
     PRICE_SOURCE_REGULATED,
 )
 from .source_engine import (
@@ -31,6 +33,9 @@ _LOGGER = logging.getLogger(__name__)
 
 UPDATE_INTERVAL = timedelta(hours=12)
 DYNAMIC_UPDATE_INTERVAL = timedelta(minutes=15)
+# RCE na dobę D+1 pojawia się ok. 14:00; 12-godzinny cykl potrafiłby ją
+# przegapić, więc profile z rozliczeniem eksportu odświeżają się co godzinę.
+EXPORT_UPDATE_INTERVAL = timedelta(hours=1)
 REQUEST_TIMEOUT = ClientTimeout(total=45)
 STORAGE_VERSION = 1
 REQUEST_HEADERS = {"User-Agent": "Home Assistant PolishEnergyPrices/1.6.3"}
@@ -45,8 +50,18 @@ class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
         self.group = str(entry.data[CONF_TARIFF])
         settings = {**entry.data, **entry.options}
         source = str(settings.get(CONF_PRICE_SOURCE, PRICE_SOURCE_REGULATED))
+        export_setting = str(
+            settings.get(CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF)
+        )
+        export_settlement = (
+            None if export_setting == EXPORT_SETTLEMENT_OFF else export_setting
+        )
         self.engine = EnergyPriceSourceEngine(
-            self.operator, self.group, source, _LOGGER
+            self.operator,
+            self.group,
+            source,
+            _LOGGER,
+            export_settlement=export_settlement,
         )
         self.tariff = self.engine.tariff
         self.store: Store[dict[str, Any]] = Store(
@@ -60,6 +75,8 @@ class EnergyPriceCoordinator(DataUpdateCoordinator[EnergyPriceData]):
             update_interval=(
                 DYNAMIC_UPDATE_INTERVAL
                 if self.tariff.dynamic_zone_source
+                else EXPORT_UPDATE_INTERVAL
+                if export_settlement is not None
                 else UPDATE_INTERVAL
             ),
         )

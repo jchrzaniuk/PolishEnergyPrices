@@ -31,12 +31,18 @@ from homeassistant.util.unit_conversion import EnergyConverter
 from .const import (
     CONF_CUSTOM_PRICES,
     CONF_DAY_HOURS,
+    CONF_EXPORT_CORRECTION,
+    CONF_EXPORT_SETTLEMENT,
     CONF_EXTERNAL_STATISTICS,
     CONF_METER_CLOCK,
     CONF_OPERATOR,
     CONF_PRICE_SOURCE,
     CONF_TARIFF,
+    DEFAULT_EXPORT_CORRECTION,
     DOMAIN,
+    EXPORT_SETTLEMENT_OFF,
+    EXPORT_SETTLEMENT_RCE,
+    EXPORT_SETTLEMENT_RCEM,
     METER_CLOCK_FIXED_WINTER,
     METER_CLOCK_LOCAL,
     PRICE_SOURCE_CUSTOM,
@@ -123,6 +129,36 @@ def _meter_clock_selector() -> SelectSelector:
     )
 
 
+def _export_settlement_selector() -> SelectSelector:
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                EXPORT_SETTLEMENT_OFF,
+                EXPORT_SETTLEMENT_RCE,
+                EXPORT_SETTLEMENT_RCEM,
+            ],
+            mode=SelectSelectorMode.DROPDOWN,
+            translation_key="export_settlement",
+        )
+    )
+
+
+def _parse_export_correction(value: Any) -> float | None:
+    """Parse the deposit correction factor, accepting a Polish decimal comma."""
+
+    try:
+        parsed = float(str(value).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    return parsed if 0.5 <= parsed <= 2.0 else None
+
+
+def _invalid_export_correction(value: Any) -> bool:
+    """Return whether the deposit correction factor is out of the 0.5-2.0 range."""
+
+    return _parse_export_correction(value) is None
+
+
 def _operator_schema(default: str | None = None) -> vol.Schema:
     marker = (
         vol.Required(CONF_OPERATOR, default=default)
@@ -176,6 +212,8 @@ def _source_schema(
     group: str,
     default: str = PRICE_SOURCE_REGULATED,
     external_statistics: bool = False,
+    export_settlement: str = EXPORT_SETTLEMENT_OFF,
+    export_correction: str = str(DEFAULT_EXPORT_CORRECTION),
 ) -> vol.Schema:
     tariff = get_tariff(operator, group)
     schema: dict[Any, Any] = {
@@ -187,6 +225,12 @@ def _source_schema(
         schema[
             vol.Required(CONF_EXTERNAL_STATISTICS, default=external_statistics)
         ] = BooleanSelector()
+    schema[
+        vol.Required(CONF_EXPORT_SETTLEMENT, default=export_settlement)
+    ] = _export_settlement_selector()
+    schema[
+        vol.Required(CONF_EXPORT_CORRECTION, default=export_correction)
+    ] = TextSelector()
     return vol.Schema(schema)
 
 
@@ -364,21 +408,28 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Choose the energy seller price source."""
 
+        errors: dict[str, str] = {}
         if user_input is not None:
-            tariff = get_tariff(
-                self._data[CONF_OPERATOR], self._data[CONF_TARIFF]
-            )
-            if not tariff.external_statistics_supported:
-                user_input[CONF_EXTERNAL_STATISTICS] = False
-            self._data.update(user_input)
-            if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
-                if self._data[CONF_TARIFF].lower() == "g13s":
-                    return await self.async_step_g13s_custom_prices()
-                return await self.async_step_custom_prices()
-            return await self._next_after_prices()
+            if _invalid_export_correction(user_input.get(CONF_EXPORT_CORRECTION)):
+                errors[CONF_EXPORT_CORRECTION] = "invalid_export_correction"
+            if not errors:
+                tariff = get_tariff(
+                    self._data[CONF_OPERATOR], self._data[CONF_TARIFF]
+                )
+                if not tariff.external_statistics_supported:
+                    user_input[CONF_EXTERNAL_STATISTICS] = False
+                user_input[CONF_EXPORT_CORRECTION] = _parse_export_correction(
+                    user_input[CONF_EXPORT_CORRECTION]
+                )
+                self._data.update(user_input)
+                if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
+                    if self._data[CONF_TARIFF].lower() == "g13s":
+                        return await self.async_step_g13s_custom_prices()
+                    return await self.async_step_custom_prices()
+                return await self._next_after_prices()
         operator = self._data[CONF_OPERATOR]
         group = self._data[CONF_TARIFF]
-        default = (
+        default_source = (
             PRICE_SOURCE_CUSTOM
             if operator == "tauron" and group.lower() == "g13s"
             else (
@@ -387,9 +438,22 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 else PRICE_SOURCE_REGULATED
             )
         )
+        fields = user_input or {}
         return self.async_show_form(
             step_id="energy",
-            data_schema=_source_schema(operator, group, default=default),
+            data_schema=_source_schema(
+                operator,
+                group,
+                default=fields.get(CONF_PRICE_SOURCE, default_source),
+                external_statistics=fields.get(CONF_EXTERNAL_STATISTICS, False),
+                export_settlement=fields.get(
+                    CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF
+                ),
+                export_correction=fields.get(
+                    CONF_EXPORT_CORRECTION, str(DEFAULT_EXPORT_CORRECTION)
+                ),
+            ),
+            errors=errors,
         )
 
     async def async_step_custom_prices(
@@ -500,8 +564,13 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                     parse_day_hours(user_input[CONF_DAY_HOURS])
                 except ValueError:
                     errors[CONF_DAY_HOURS] = "invalid_hours"
+            if _invalid_export_correction(user_input.get(CONF_EXPORT_CORRECTION)):
+                errors[CONF_EXPORT_CORRECTION] = "invalid_export_correction"
             if not errors:
                 self._options = user_input
+                self._options[CONF_EXPORT_CORRECTION] = _parse_export_correction(
+                    user_input[CONF_EXPORT_CORRECTION]
+                )
                 if not get_tariff(operator, group).external_statistics_supported:
                     self._options[CONF_EXTERNAL_STATISTICS] = False
                 if user_input[CONF_PRICE_SOURCE] == PRICE_SOURCE_CUSTOM:
@@ -531,6 +600,16 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 CONF_METER_CLOCK,
                 default=current.get(CONF_METER_CLOCK, METER_CLOCK_LOCAL),
             ): _meter_clock_selector(),
+            vol.Required(
+                CONF_EXPORT_SETTLEMENT,
+                default=current.get(CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF),
+            ): _export_settlement_selector(),
+            vol.Required(
+                CONF_EXPORT_CORRECTION,
+                default=str(
+                    current.get(CONF_EXPORT_CORRECTION, DEFAULT_EXPORT_CORRECTION)
+                ),
+            ): TextSelector(),
         }
         if get_tariff(operator, group).external_statistics_supported:
             schema[

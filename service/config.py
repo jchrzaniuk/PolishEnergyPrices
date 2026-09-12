@@ -30,6 +30,8 @@ class ProfileConfig:
     meter_clock: str = "local_time"
     day_hours: str | None = None
     custom_prices: dict[str, float] | None = None
+    export_settlement: str = "off"
+    export_correction: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,9 +177,21 @@ def _profile_config(profile_id: str, raw: object) -> ProfileConfig:
     if day_hours:
         parse_day_hours(day_hours)
 
+    export_settlement = str(values.get("export_settlement", "off"))
+    if export_settlement not in {"off", "rce", "rcem"}:
+        raise ValueError(f"Profil {profile_id} ma nieznane export_settlement")
+    export_correction = _export_correction(
+        values.get("export_correction", 1.0), profile_id
+    )
+
     custom_prices_raw = values.get("custom_prices")
     custom_prices: dict[str, float] | None = None
-    engine = EnergyPriceSourceEngine(operator, group, price_source)
+    engine = EnergyPriceSourceEngine(
+        operator,
+        group,
+        price_source,
+        export_settlement=None if export_settlement == "off" else export_settlement,
+    )
     if custom_prices_raw is not None:
         custom_prices = engine.validate_prices(custom_prices_raw)
     if price_source == "custom" and custom_prices is None:
@@ -190,6 +204,8 @@ def _profile_config(profile_id: str, raw: object) -> ProfileConfig:
         meter_clock,
         day_hours,
         custom_prices,
+        export_settlement,
+        export_correction,
     )
 
 
@@ -217,6 +233,20 @@ def _port(value: object, name: str) -> int:
     if not 1 <= port <= 65535:
         raise ValueError(f"{name} musi mieścić się w zakresie 1-65535")
     return port
+
+
+def _export_correction(value: object, profile_id: str) -> float:
+    try:
+        correction = float(str(value).replace(",", "."))
+    except ValueError as err:
+        raise ValueError(
+            f"Profil {profile_id} ma nieprawidłowe export_correction"
+        ) from err
+    if not 0.5 <= correction <= 2.0:
+        raise ValueError(
+            f"Profil {profile_id} ma export_correction poza zakresem 0.5-2.0"
+        )
+    return correction
 
 
 def _optional_str(value: object) -> str | None:

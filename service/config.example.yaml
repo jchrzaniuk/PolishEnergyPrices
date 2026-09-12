@@ -15,6 +15,14 @@ profiles:
   #   custom_prices:
   #     calodobowa: 0.7500
 
+  # Przykład prosumenta rozliczanego RCE (net-billing od 1.07.2024):
+  # prosument:
+  #   operator: tauron
+  #   tariff: G11
+  #   export_settlement: rce
+  #   # Ustawowy współczynnik korygujący depozytu obowiązujący od 1.02.2025.
+  #   export_correction: 1.23
+
 http:
   host: 0.0.0.0
   port: 8080
