@@ -435,9 +435,11 @@ i listą okresów oraz skalary `export_price_net`, `export_raw_net`,
 `export_period` i `export_settlement`. Profile bez rozliczenia eksportu nie
 otrzymują tych tematów.
 
-Opłaty stałe, zwrot niewykorzystanych środków depozytu (do 20% wartości
-depozytu za dany miesiąc, jeżeli nie zostaną rozliczone w ciągu 12 miesięcy)
-ani salda miesięczne nie są w zakresie projektu.
+Opłaty stałe, zwrot niewykorzystanych środków depozytu ani salda miesięczne
+nie są w zakresie projektu. Sam limit zwrotu zależy od trybu rozliczenia:
+środki niewykorzystane w ciągu 12 miesięcy podlegają zwrotowi do 20% wartości
+depozytu miesięcznego przy RCEm, a od 1.02.2025 do 30% przy rozliczeniu
+godzinowym RCE.
 
 ## Co dokładnie zawiera cena
 
