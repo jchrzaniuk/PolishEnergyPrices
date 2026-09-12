@@ -96,7 +96,9 @@ Rozliczenie energii wprowadzonej do sieci (net-billing) włącza `export_settlem
 
 `export_correction` to ustawowy współczynnik korygujący depozytu prosumenckiego,
 w zakresie 0.5–2.0, domyślnie `1.0`. Od 1.02.2025 ustawa o OZE przewiduje
-wartość `1.23`; usługa jej nie narzuca automatycznie.
+wartość `1.23`; usługa jej nie narzuca automatycznie. Integracja Home Assistant
+pozwala wybrać z listy tylko `1,0` albo `1,23`; plik YAML tej usługi przyjmuje
+dowolną liczbę z zakresu 0.5–2.0.
 
 ## HTTP
 

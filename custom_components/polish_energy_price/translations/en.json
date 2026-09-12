@@ -33,7 +33,7 @@
         "data_description": {
           "external_statistics": "Włącz tylko wtedy, gdy licznik udostępnia statystyki bez encji (np. import danych godzinowych TAURON AMIplus). Zwykłe liczniki encjowe tego nie wymagają.",
           "export_settlement": "RCE (market energy price) is PSE's published net price for 15-minute periods, one day before the trading day. RCEm is its monthly counterpart, published on the 11th of the following month. Choose \"Off\" if you are not settled under net-billing.",
-          "export_correction": "Since 1 Feb 2025 the prosumer deposit value is multiplied by the statutory correction factor 1.23. Leave it at 1.0 to see the raw PSE price with no adjustment."
+          "export_correction": "Choose from the list: the statutory 1.23 (in force since 1 Feb 2025), or 1.0 for the raw PSE price with no adjustment."
         }
       },
       "custom_prices": {
@@ -109,7 +109,7 @@
         },
         "data_description": {
           "export_settlement": "RCE (market energy price) is PSE's published net price for 15-minute periods, one day before the trading day. RCEm is its monthly counterpart, published on the 11th of the following month. Choose \"Off\" if you are not settled under net-billing.",
-          "export_correction": "Since 1 Feb 2025 the prosumer deposit value is multiplied by the statutory correction factor 1.23. Leave it at 1.0 to see the raw PSE price with no adjustment."
+          "export_correction": "Choose from the list: the statutory 1.23 (in force since 1 Feb 2025), or 1.0 for the raw PSE price with no adjustment."
         }
       },
       "custom_prices": {
@@ -176,6 +176,12 @@
         "off": "Off",
         "rce": "RCE — 15-minute price",
         "rcem": "RCEm — monthly price"
+      }
+    },
+    "export_correction": {
+      "options": {
+        "1.23": "1.23 — statutory prosumer deposit value",
+        "1.0": "1.0 — raw PSE price, no adjustment"
       }
     }
   },

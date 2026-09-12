@@ -33,7 +33,7 @@
         "data_description": {
           "external_statistics": "Włącz tylko wtedy, gdy licznik udostępnia statystyki bez encji (np. import danych godzinowych TAURON AMIplus). Zwykłe liczniki encjowe tego nie wymagają.",
           "export_settlement": "RCE (rynkowa cena energii) to publikowana przez PSE cena netto dla 15-minutowych okresów, dzień przed dobą handlową. RCEm to jej miesięczny odpowiednik, publikowany 11. dnia kolejnego miesiąca. Wybierz „Wyłączone”, jeśli nie rozliczasz się w systemie net-billing.",
-          "export_correction": "Od 1.02.2025 wartość depozytu prosumenckiego mnoży się przez ustawowy współczynnik korygujący 1,23. Zostaw 1,0, aby zobaczyć surową cenę PSE bez przeliczenia."
+          "export_correction": "Wybierz z listy: ustawowe 1,23 (obowiązuje od 1.02.2025) albo 1,0, czyli surową cenę PSE bez przeliczenia."
         }
       },
       "custom_prices": {
@@ -109,7 +109,7 @@
         },
         "data_description": {
           "export_settlement": "RCE (rynkowa cena energii) to publikowana przez PSE cena netto dla 15-minutowych okresów, dzień przed dobą handlową. RCEm to jej miesięczny odpowiednik, publikowany 11. dnia kolejnego miesiąca. Wybierz „Wyłączone”, jeśli nie rozliczasz się w systemie net-billing.",
-          "export_correction": "Od 1.02.2025 wartość depozytu prosumenckiego mnoży się przez ustawowy współczynnik korygujący 1,23. Zostaw 1,0, aby zobaczyć surową cenę PSE bez przeliczenia."
+          "export_correction": "Wybierz z listy: ustawowe 1,23 (obowiązuje od 1.02.2025) albo 1,0, czyli surową cenę PSE bez przeliczenia."
         }
       },
       "custom_prices": {
@@ -176,6 +176,12 @@
         "off": "Wyłączone",
         "rce": "RCE — cena za okres 15-minutowy",
         "rcem": "RCEm — cena miesięczna"
+      }
+    },
+    "export_correction": {
+      "options": {
+        "1.23": "1,23 — ustawowa wartość depozytu prosumenckiego",
+        "1.0": "1,0 — surowa cena PSE, bez przeliczenia"
       }
     }
   },

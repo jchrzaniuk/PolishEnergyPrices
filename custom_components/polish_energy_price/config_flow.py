@@ -159,6 +159,29 @@ def _invalid_export_correction(value: Any) -> bool:
     return _parse_export_correction(value) is None
 
 
+_EXPORT_CORRECTION_OPTIONS = ("1.23", "1.0")
+
+
+def _export_correction_selector() -> SelectSelector:
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=list(_EXPORT_CORRECTION_OPTIONS),
+            mode=SelectSelectorMode.DROPDOWN,
+            translation_key="export_correction",
+        )
+    )
+
+
+def _export_correction_default(value: Any) -> str:
+    """Match a stored correction factor to a list option, defaulting to 1.0."""
+
+    parsed = _parse_export_correction(value)
+    for option in _EXPORT_CORRECTION_OPTIONS:
+        if parsed == float(option):
+            return option
+    return "1.0"
+
+
 def _operator_schema(default: str | None = None) -> vol.Schema:
     marker = (
         vol.Required(CONF_OPERATOR, default=default)
@@ -230,7 +253,7 @@ def _source_schema(
     ] = _export_settlement_selector()
     schema[
         vol.Required(CONF_EXPORT_CORRECTION, default=export_correction)
-    ] = TextSelector()
+    ] = _export_correction_selector()
     return vol.Schema(schema)
 
 
@@ -449,8 +472,8 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 export_settlement=fields.get(
                     CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF
                 ),
-                export_correction=fields.get(
-                    CONF_EXPORT_CORRECTION, str(DEFAULT_EXPORT_CORRECTION)
+                export_correction=_export_correction_default(
+                    fields.get(CONF_EXPORT_CORRECTION, DEFAULT_EXPORT_CORRECTION)
                 ),
             ),
             errors=errors,
@@ -606,10 +629,10 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
             ): _export_settlement_selector(),
             vol.Required(
                 CONF_EXPORT_CORRECTION,
-                default=str(
+                default=_export_correction_default(
                     current.get(CONF_EXPORT_CORRECTION, DEFAULT_EXPORT_CORRECTION)
                 ),
-            ): TextSelector(),
+            ): _export_correction_selector(),
         }
         if get_tariff(operator, group).external_statistics_supported:
             schema[

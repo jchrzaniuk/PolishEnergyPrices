@@ -373,10 +373,13 @@ akcyza.
 Od 1.02.2025 wartość depozytu prosumenckiego mnoży się przez ustawowy
 współczynnik korygujący **1,23** (ustawa o OZE). Projekt nie narzuca tej
 wartości: domyślnie stosuje `1.0`, czyli surową cenę PSE bez przeliczenia.
+To nie jest VAT — RCE i RCEm są cenami netto i nic się do nich nie dolicza.
 Ustaw współczynnik jawnie, jeżeli dotyczy Twojej umowy:
 
-- w Home Assistant — pole **Współczynnik korygujący depozytu** w opcjach wpisu;
-- w usłudze Docker — pole `export_correction` profilu w `service/config.yaml`.
+- w Home Assistant — pole **Współczynnik korygujący depozytu** w opcjach
+  wpisu, wybierane z listy dwóch wartości (`1,23` albo `1,0`);
+- w usłudze Docker — pole `export_correction` profilu w
+  `service/config.yaml`, w którym podaje się liczbę z zakresu 0.5–2.0.
 
 ### Ujemna RCE
 
