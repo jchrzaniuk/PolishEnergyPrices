@@ -706,20 +706,23 @@ class EnergyPriceSourceEngine:
             return current
 
         local_now = now.astimezone(WARSAW)
-        years = {local_now.year}
-        if local_now.month == 1:
-            # The December RCEm is only published on 11 January.
-            years.add(local_now.year - 1)
+        # Both the current and the previous year's tables live on the same
+        # RCEm page, so fetching one page and parsing two years costs no
+        # extra request. Always requesting both (not just in January) keeps
+        # a late "skorygowana RCEm" correction for last December — or any
+        # other month of the previous year still within the 14-month
+        # retention below — refreshable all year round.
+        years = {local_now.year, local_now.year - 1}
 
         try:
             page = (await fetch_bytes(RCEM_PAGE, MAX_PAGE_BYTES)).decode(
                 "utf-8", errors="replace"
             )
-            # Early January: the current year's table does not exist yet on
-            # the page (its first price appears only on 11 February), so
-            # only last year's table (with the December price) succeeds.
-            # A missing single year must not abort the whole refresh; only
-            # raise once every requested year has failed to parse.
+            # Early in the year the current year's table does not exist yet
+            # on the page (its first price appears only on 11 February), so
+            # only last year's table succeeds at that time. A missing single
+            # year must not abort the whole refresh; only raise once every
+            # requested year has failed to parse.
             parsed: dict[str, float] = {}
             failures: list[str] = []
             for year in sorted(years, reverse=True):

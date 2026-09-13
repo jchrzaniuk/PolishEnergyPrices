@@ -12,6 +12,7 @@ from custom_components.polish_energy_price.export_price import (
     negative_periods,
     parse_rce,
     parse_rcem,
+    rcem_statistics_start,
     upcoming_export_periods,
 )
 from custom_components.polish_energy_price.tariff import WARSAW
@@ -215,6 +216,12 @@ class ExportPriceAtTests(unittest.TestCase):
         self.assertEqual("2026-02", result.period)
         self.assertEqual(0.33139, result.raw)
 
+        corrected = export_price_at(
+            ts, settlement="rcem", rcem_prices=rcem_prices, correction=1.23
+        )
+        self.assertEqual("2026-02", corrected.period)
+        self.assertEqual(round(0.33139 * 1.23, 6), corrected.value)
+
     def test_naive_timestamp_and_unknown_settlement_raise(self) -> None:
         rce_prices = {"2026-09-10T22:00:00+00:00": 0.72566}
         with self.assertRaises(ValueError):
@@ -224,6 +231,27 @@ class ExportPriceAtTests(unittest.TestCase):
         ts = datetime(2026, 9, 10, 22, 5, tzinfo=timezone.utc)
         with self.assertRaises(ValueError):
             export_price_at(ts, settlement="unknown", rce_prices=rce_prices)
+
+
+class RcemStatisticsStartTests(unittest.TestCase):
+    def test_earliest_month_winter_offset(self) -> None:
+        # January is UTC+1 in Warsaw: local midnight 1 Jan is 23:00 UTC on
+        # 31 December.
+        result = rcem_statistics_start({"2026-01": 0.5, "2026-03": 0.2})
+        self.assertEqual(
+            datetime(2025, 12, 31, 23, tzinfo=timezone.utc), result
+        )
+
+    def test_earliest_month_summer_offset(self) -> None:
+        # July is UTC+2 in Warsaw: local midnight 1 Jul is 22:00 UTC on 30
+        # June.
+        result = rcem_statistics_start({"2026-07": 0.3})
+        self.assertEqual(
+            datetime(2026, 6, 30, 22, tzinfo=timezone.utc), result
+        )
+
+    def test_empty_mapping_returns_none(self) -> None:
+        self.assertIsNone(rcem_statistics_start({}))
 
 
 class UpcomingExportPeriodsTests(unittest.TestCase):

@@ -213,6 +213,21 @@ def rcem_month_key(day: date) -> str:
     return f"{day.year:04d}-{day.month:02d}"
 
 
+def rcem_statistics_start(rcem_prices: Mapping[str, float]) -> datetime | None:
+    """Zwróć początek (UTC) najwcześniejszego znanego miesiąca RCEm.
+
+    Punktem odniesienia jest północ 1. dnia tego miesiąca czasu warszawskiego
+    — to od tej chwili statystyka zwrotu do sieci może zacząć naliczanie.
+    Pusty słownik cen zwraca ``None`` (brak jakiejkolwiek znanej ceny RCEm).
+    """
+
+    if not rcem_prices:
+        return None
+    earliest = min(rcem_prices)
+    local_midnight = datetime.strptime(earliest, "%Y-%m").replace(tzinfo=WARSAW)
+    return local_midnight.astimezone(timezone.utc)
+
+
 def export_price_at(
     ts: datetime,
     *,

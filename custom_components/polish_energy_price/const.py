@@ -17,6 +17,8 @@ CONF_EXTERNAL_STATISTICS = "external_statistics"
 CONF_EXTERNAL_STATISTIC_PREFIX = "external_statistic_"
 CONF_EXPORT_SETTLEMENT = "export_settlement"
 CONF_EXPORT_CORRECTION = "export_correction"
+CONF_EXPORT_STATISTICS = "export_statistics"
+CONF_EXPORT_STATISTIC = "export_statistic"
 
 PRICE_SOURCE_REGULATED = "regulated"
 PRICE_SOURCE_CUSTOM = "custom"

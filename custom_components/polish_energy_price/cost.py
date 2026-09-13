@@ -29,6 +29,12 @@ def cost_statistic_id(entry_id: str, zone: str) -> str:
     return f"polish_energy_price:{entry_id}_cost_{zone}".lower()
 
 
+def compensation_statistic_id(entry_id: str) -> str:
+    """Return an entity-ID-compatible external RCEm compensation statistic ID."""
+
+    return f"polish_energy_price:{entry_id}_compensation_rcem".lower()
+
+
 def cumulative_cost_rows(
     rows: Iterable[Mapping[str, float | None]], price: float
 ) -> list[CostStatisticRow]:
@@ -100,6 +106,66 @@ def hourly_cumulative_cost_rows(
                 raise ValueError("Cena godzinowa G13s jest nieprawidłowa")
             running_cost += delta * price
         rounded = round(running_cost, 6)
+        result.append(
+            {"start": current_start, "state": rounded, "sum": rounded}
+        )
+        previous_start = current_start
+        previous_sum = current_sum
+    return result
+
+
+def interval_cumulative_value_rows(
+    rows: Iterable[Mapping[str, float | None]],
+    price_at: Callable[[datetime], float | None],
+) -> list[CostStatisticRow]:
+    """Price consecutive cumulative-energy rows using the LATER row's rate.
+
+    Used for RCEm grid-export compensation, where the settlement price is
+    only known monthly and a data gap must not abort the statistic. A
+    recorder hourly statistics row with ``start = T`` carries a cumulative
+    ``sum`` that already includes energy up to the end of the hour
+    ``[T, T+1h)`` (see ``homeassistant/components/sensor/recorder.py``,
+    ``compile_statistics``). So the difference between two consecutive rows
+    is the energy of the hour beginning at the LATER row's ``start``, and
+    that later start is what gets priced — the opposite convention from
+    ``hourly_cumulative_cost_rows``, which prices consumption at the
+    earlier row's start.
+
+    The first usable energy row is a zero-value baseline. A gap between two
+    rows longer than an hour is not an error: the whole delta is priced at
+    the later row's start.
+    """
+
+    result: list[CostStatisticRow] = []
+    previous_start: datetime | None = None
+    previous_sum: float | None = None
+    running_value = 0.0
+    for row in rows:
+        start = row.get("start")
+        energy_sum = row.get("sum")
+        if start is None or energy_sum is None:
+            continue
+        current_start = datetime.fromtimestamp(float(start), tz=timezone.utc)
+        current_sum = float(energy_sum)
+        if not math.isfinite(current_sum):
+            continue
+        if previous_start is None or previous_sum is None:
+            previous_start = current_start
+            previous_sum = current_sum
+            result.append({"start": current_start, "state": 0.0, "sum": 0.0})
+            continue
+
+        if current_start <= previous_start:
+            raise ValueError("Godziny statystyki zwrotu nie są rosnące")
+        delta = current_sum - previous_sum
+        if delta < -1e-6:
+            raise ValueError("Narastająca statystyka zwrotu została wyzerowana")
+        if delta > 0:
+            price = price_at(current_start)
+            if price is None or not math.isfinite(price) or price < 0:
+                raise ValueError("Cena zwrotu do sieci jest nieprawidłowa")
+            running_value += delta * price
+        rounded = round(running_value, 6)
         result.append(
             {"start": current_start, "state": rounded, "sum": rounded}
         )

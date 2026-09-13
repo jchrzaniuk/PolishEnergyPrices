@@ -546,6 +546,31 @@ class SourceEngineTests(unittest.TestCase):
         restored = engine.data_from_cache(payload)
         self.assertEqual(refreshed.rcem_prices, restored.rcem_prices)
 
+    def test_export_rcem_september_fetches_both_years_from_one_page(self) -> None:
+        # Outside January too, both the current and previous year's tables
+        # must be picked up from the single fetched page, so a correction to
+        # last year's December (or any other month of that year) still
+        # keeps refreshing all year round.
+        engine = EnergyPriceSourceEngine(
+            "tauron", "G11", "regulated", export_settlement="rcem"
+        )
+        current = engine.initial_data()
+        now = datetime(2026, 9, 11, 12, tzinfo=WARSAW)
+        calls: list[str] = []
+
+        async def fetch(url, *_args, **_kwargs):
+            calls.append(url)
+            return RCEM_HTML_TWO_YEARS.encode()
+
+        refreshed = asyncio.run(
+            engine._refresh_rcem(current, now.isoformat(), fetch, now)
+        )
+        self.assertEqual(1, len(calls))
+        self.assertEqual(
+            {"2026-01", "2025-01"}, set(refreshed.rcem_prices or {})
+        )
+        self.assertIsNone(refreshed.rcem_error)
+
     def test_export_rcem_january_missing_current_year_table_is_not_an_error(
         self,
     ) -> None:
@@ -834,6 +859,31 @@ RCEM_HTML_FIXTURE = """
 <tr><td bgcolor="#eeeeee" colspan="4"><strong>styczeń</strong></td></tr>
 <tr><td nowrap="nowrap">RCEm</td><td align="right">551,96</td>
 <td align="center">11.02.2026</td><td align="center">-</td></tr>
+<tr><td nowrap="nowrap">skorygowana RCEm*</td><td align="right">-</td>
+<td align="center">-</td><td align="center">-</td></tr>
+</tbody></table>
+"""
+
+# Both the current year's and the previous year's tables on one page, as
+# they normally sit together outside of early January.
+RCEM_HTML_TWO_YEARS = """
+<table><tbody>
+<tr><th align="center" colspan="4"><strong>2026</strong></th></tr>
+<tr><td bgcolor="#eeeeee">&nbsp;</td><td align="center">cena [zł/MWh]</td>
+<td align="center">data publikacji</td><td align="center">różnica</td></tr>
+<tr><td bgcolor="#eeeeee" colspan="4"><strong>styczeń</strong></td></tr>
+<tr><td nowrap="nowrap">RCEm</td><td align="right">551,96</td>
+<td align="center">11.02.2026</td><td align="center">-</td></tr>
+<tr><td nowrap="nowrap">skorygowana RCEm*</td><td align="right">-</td>
+<td align="center">-</td><td align="center">-</td></tr>
+</tbody></table>
+<table><tbody>
+<tr><th align="center" colspan="4"><strong>2025</strong></th></tr>
+<tr><td bgcolor="#eeeeee">&nbsp;</td><td align="center">cena [zł/MWh]</td>
+<td align="center">data publikacji</td><td align="center">różnica</td></tr>
+<tr><td bgcolor="#eeeeee" colspan="4"><strong>styczeń</strong></td></tr>
+<tr><td nowrap="nowrap">RCEm</td><td align="right">100,00</td>
+<td align="center">11.02.2025</td><td align="center">-</td></tr>
 <tr><td nowrap="nowrap">skorygowana RCEm*</td><td align="right">-</td>
 <td align="center">-</td><td align="center">-</td></tr>
 </tbody></table>

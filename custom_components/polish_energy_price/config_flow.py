@@ -33,6 +33,9 @@ from .const import (
     CONF_DAY_HOURS,
     CONF_EXPORT_CORRECTION,
     CONF_EXPORT_SETTLEMENT,
+    CONF_EXPORT_STATISTIC,
+    CONF_EXPORT_STATISTICS,
+    CONF_EXTERNAL_STATISTIC_PREFIX,
     CONF_EXTERNAL_STATISTICS,
     CONF_METER_CLOCK,
     CONF_OPERATOR,
@@ -236,6 +239,7 @@ def _source_schema(
     default: str = PRICE_SOURCE_REGULATED,
     external_statistics: bool = False,
     export_settlement: str = EXPORT_SETTLEMENT_OFF,
+    export_statistics: bool = False,
     export_correction: str = str(DEFAULT_EXPORT_CORRECTION),
 ) -> vol.Schema:
     tariff = get_tariff(operator, group)
@@ -252,9 +256,43 @@ def _source_schema(
         vol.Required(CONF_EXPORT_SETTLEMENT, default=export_settlement)
     ] = _export_settlement_selector()
     schema[
+        vol.Required(CONF_EXPORT_STATISTICS, default=export_statistics)
+    ] = BooleanSelector()
+    schema[
         vol.Required(CONF_EXPORT_CORRECTION, default=export_correction)
     ] = _export_correction_selector()
     return vol.Schema(schema)
+
+
+def _export_statistic_schema(
+    statistic_options: list[SelectOptionDict],
+    default: str | None = None,
+) -> vol.Schema:
+    """Select one cumulative energy-exported statistic for RCEm compensation."""
+
+    marker = (
+        vol.Required(CONF_EXPORT_STATISTIC, default=default)
+        if default
+        else vol.Required(CONF_EXPORT_STATISTIC)
+    )
+    return vol.Schema({marker: _select(statistic_options)})
+
+
+def _mapped_consumption_statistics(data: dict[str, Any]) -> set[str]:
+    """Return cumulative energy statistics mapped to a tariff zone.
+
+    Only meaningful while the consumption-cost bridge is enabled: a
+    disabled bridge can leave stale zone mappings sitting in options, and
+    those must not collide with the export statistic selection.
+    """
+
+    if not data.get(CONF_EXTERNAL_STATISTICS, False):
+        return set()
+    return {
+        str(value)
+        for key, value in data.items()
+        if key.startswith(CONF_EXTERNAL_STATISTIC_PREFIX) and value
+    }
 
 
 def _prices_schema(
@@ -435,6 +473,11 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if _invalid_export_correction(user_input.get(CONF_EXPORT_CORRECTION)):
                 errors[CONF_EXPORT_CORRECTION] = "invalid_export_correction"
+            if (
+                user_input.get(CONF_EXPORT_STATISTICS)
+                and user_input.get(CONF_EXPORT_SETTLEMENT) != EXPORT_SETTLEMENT_RCEM
+            ):
+                errors[CONF_EXPORT_STATISTICS] = "export_statistics_requires_rcem"
             if not errors:
                 tariff = get_tariff(
                     self._data[CONF_OPERATOR], self._data[CONF_TARIFF]
@@ -472,6 +515,7 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 export_settlement=fields.get(
                     CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF
                 ),
+                export_statistics=fields.get(CONF_EXPORT_STATISTICS, False),
                 export_correction=_export_correction_default(
                     fields.get(CONF_EXPORT_CORRECTION, DEFAULT_EXPORT_CORRECTION)
                 ),
@@ -520,7 +564,7 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _next_after_prices(self) -> ConfigFlowResult:
         if self._data.get(CONF_EXTERNAL_STATISTICS, False):
             return await self.async_step_external_statistics()
-        return self._finish()
+        return await self._after_external_statistics()
 
     async def async_step_external_statistics(
         self, user_input: dict[str, Any] | None = None
@@ -533,7 +577,7 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "duplicate_statistics"
             else:
                 self._data.update(user_input)
-                return self._finish()
+                return await self._after_external_statistics()
         statistic_options = await _energy_statistic_options(self.hass)
         if not statistic_options:
             errors["base"] = "no_energy_statistics"
@@ -544,6 +588,35 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._data[CONF_TARIFF],
                 statistic_options,
                 user_input,
+            ),
+            errors=errors,
+        )
+
+    async def _after_external_statistics(self) -> ConfigFlowResult:
+        if self._data.get(CONF_EXPORT_STATISTICS, False):
+            return await self.async_step_export_statistic()
+        return self._finish()
+
+    async def async_step_export_statistic(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select the cumulative energy-exported statistic for RCEm compensation."""
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            selected = str(user_input[CONF_EXPORT_STATISTIC])
+            if selected in _mapped_consumption_statistics(self._data):
+                errors["base"] = "export_statistic_duplicate"
+            else:
+                self._data[CONF_EXPORT_STATISTIC] = selected
+                return self._finish()
+        statistic_options = await _energy_statistic_options(self.hass)
+        if not statistic_options:
+            errors["base"] = "no_energy_statistics"
+        return self.async_show_form(
+            step_id="export_statistic",
+            data_schema=_export_statistic_schema(
+                statistic_options, self._data.get(CONF_EXPORT_STATISTIC)
             ),
             errors=errors,
         )
@@ -589,6 +662,11 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                     errors[CONF_DAY_HOURS] = "invalid_hours"
             if _invalid_export_correction(user_input.get(CONF_EXPORT_CORRECTION)):
                 errors[CONF_EXPORT_CORRECTION] = "invalid_export_correction"
+            if (
+                user_input.get(CONF_EXPORT_STATISTICS)
+                and user_input.get(CONF_EXPORT_SETTLEMENT) != EXPORT_SETTLEMENT_RCEM
+            ):
+                errors[CONF_EXPORT_STATISTICS] = "export_statistics_requires_rcem"
             if not errors:
                 self._options = user_input
                 self._options[CONF_EXPORT_CORRECTION] = _parse_export_correction(
@@ -627,6 +705,10 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 CONF_EXPORT_SETTLEMENT,
                 default=current.get(CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF),
             ): _export_settlement_selector(),
+            vol.Required(
+                CONF_EXPORT_STATISTICS,
+                default=current.get(CONF_EXPORT_STATISTICS, False),
+            ): BooleanSelector(),
             vol.Required(
                 CONF_EXPORT_CORRECTION,
                 default=_export_correction_default(
@@ -698,7 +780,7 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
     async def _next_after_prices(self) -> ConfigFlowResult:
         if self._options.get(CONF_EXTERNAL_STATISTICS, False):
             return await self.async_step_external_statistics()
-        return self.async_create_entry(data=self._options)
+        return await self._after_external_statistics()
 
     async def async_step_external_statistics(
         self, user_input: dict[str, Any] | None = None
@@ -711,7 +793,7 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 errors["base"] = "duplicate_statistics"
             else:
                 self._options.update(user_input)
-                return self.async_create_entry(data=self._options)
+                return await self._after_external_statistics()
         current = {
             **self.config_entry.data,
             **self.config_entry.options,
@@ -727,6 +809,40 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 self.config_entry.data[CONF_TARIFF],
                 statistic_options,
                 current if user_input is None else user_input,
+            ),
+            errors=errors,
+        )
+
+    async def _after_external_statistics(self) -> ConfigFlowResult:
+        if self._options.get(CONF_EXPORT_STATISTICS, False):
+            return await self.async_step_export_statistic()
+        return self.async_create_entry(data=self._options)
+
+    async def async_step_export_statistic(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the cumulative energy-exported statistic for RCEm compensation."""
+
+        errors: dict[str, str] = {}
+        current = {
+            **self.config_entry.data,
+            **self.config_entry.options,
+            **self._options,
+        }
+        if user_input is not None:
+            selected = str(user_input[CONF_EXPORT_STATISTIC])
+            if selected in _mapped_consumption_statistics(current):
+                errors["base"] = "export_statistic_duplicate"
+            else:
+                self._options[CONF_EXPORT_STATISTIC] = selected
+                return self.async_create_entry(data=self._options)
+        statistic_options = await _energy_statistic_options(self.hass)
+        if not statistic_options:
+            errors["base"] = "no_energy_statistics"
+        return self.async_show_form(
+            step_id="export_statistic",
+            data_schema=_export_statistic_schema(
+                statistic_options, current.get(CONF_EXPORT_STATISTIC)
             ),
             errors=errors,
         )

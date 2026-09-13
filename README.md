@@ -403,6 +403,12 @@ RCEm za dany miesiąc jest publikowana 11. dnia miesiąca następnego. Do tego
 czasu obowiązuje ostatni znany miesiąc. PSE może później opublikować
 „skorygowaną RCEm”, która ma pierwszeństwo przed pierwotną wartością.
 
+Encja ceny pokazuje zawsze cenę znaną w danej chwili. Panel Energia zapisuje
+wartość zwrotu na bieżąco i nie przelicza jej, gdy cena się później zmieni.
+Jeśli energia oddana w danym miesiącu ma zostać wyceniona jego własną RCEm,
+użyj statystyki zwrotu opisanej w sekcji
+[Statystyka zwrotu dla RCEm](#statystyka-zwrotu-dla-rcem).
+
 ### Konfiguracja w Home Assistant
 
 1. Otwórz **Ustawienia → Urządzenia i usługi → Polish Energy Prices →
@@ -429,6 +435,128 @@ Jej atrybuty:
 1. W konfiguracji panelu Energia otwórz sekcję **Zwrot do sieci**.
 2. Wybierz **Użyj encji z bieżącą ceną**.
 3. Wskaż encję **Cena energii wprowadzonej do sieci**.
+
+W trybie RCE to wystarcza, bo cena każdego kwadransa jest znana dzień
+wcześniej. W trybie RCEm lepiej użyć statystyki zwrotu opisanej niżej.
+
+### Statystyka zwrotu dla RCEm
+
+#### Po co
+
+Sprzedawca rozlicza energię oddaną w danym miesiącu według RCEm tego samego
+miesiąca. Tymczasem PSE publikuje ją dopiero 11. dnia miesiąca następnego.
+Panel Energia, któremu wskazano encję z bieżącą ceną, mnoży każdą oddaną
+kilowatogodzinę przez cenę obowiązującą w chwili pomiaru i zapisuje wynik na
+stałe. Energia z danego miesiąca zostaje więc wyceniona ceną z poprzedniego
+albo nawet przedprzedniego miesiąca i nic tego później nie poprawia.
+
+Statystyka zwrotu rozwiązuje ten problem. Integracja sama liczy narastającą
+kwotę zwrotu w walucie Home Assistant i przelicza ją wstecz, gdy tylko pojawi
+się cena, której wcześniej brakowało.
+
+#### Jak to działa
+
+Każda godzina oddawania energii należy do jednego miesiąca kalendarzowego
+według czasu polskiego. Godzina od północy do pierwszej w nocy pierwszego dnia
+miesiąca należy już do nowego miesiąca, niezależnie od czasu letniego czy
+zimowego.
+
+Dla każdego miesiąca integracja używa jednej z dwóch cen:
+
+- **ceny ostatecznej** — gdy RCEm tego miesiąca jest już opublikowana, a jeśli
+  PSE wydało skorygowaną RCEm, to właśnie ona;
+- **ceny tymczasowej** — gdy RCEm tego miesiąca jeszcze nie ma. Wtedy liczy się
+  ostatnia opublikowana cena wcześniejszego miesiąca.
+
+Kwota za godzinę to energia oddana w tej godzinie × cena miesiąca ×
+współczynnik korygujący depozytu. Kwoty sumują się narastająco od początku
+statystyki.
+
+Integracja zapamiętuje, z jakich cen ostatnio liczyła. Gdy PSE opublikuje nową
+RCEm albo skorygowaną RCEm, zestaw cen się zmienia i integracja przelicza całą
+statystykę od początku: godziny wyceniane dotąd ceną tymczasową dostają cenę
+ostateczną, a wszystkie późniejsze sumy narastające przesuwają się o różnicę.
+Ta sama pełna przeliczka następuje po zmianie współczynnika korygującego.
+
+Przykład przy współczynniku 1,23:
+
+1. 15 kwietnia oddajesz do sieci 10 kWh. RCEm za kwiecień jeszcze nie istnieje,
+   ostatnia opublikowana jest marcowa: 0,30 zł/kWh. Statystyka dopisuje
+   tymczasowo 10 × 0,30 × 1,23 = 3,69 zł.
+2. 11 maja PSE publikuje RCEm za kwiecień: 0,25 zł/kWh. Integracja wykrywa nową
+   cenę i przelicza historię. Te same 10 kWh są teraz warte
+   10 × 0,25 × 1,23 = 3,08 zł, a panel Energia pokazuje dla 15 kwietnia nową
+   wartość.
+3. Energia oddana w maju jest do 11 czerwca wyceniana tymczasowo ceną
+   kwietniową. Potem historia przelicza się ponownie.
+
+Pozostałe zasady:
+
+- **Aktualizacja.** Statystyka odświeża się co godzinę. Między zmianami cen
+  integracja nadpisuje tylko ostatnie 7 dni, co wystarcza na opóźnione odczyty
+  licznika. Stronę RCEm integracja sprawdza co 12 godzin, więc nowa cena może
+  trafić do statystyki nawet kilkanaście godzin po publikacji przez PSE.
+- **Początek statystyki.** Statystyka zaczyna się od pierwszego dnia
+  najwcześniejszego miesiąca, dla którego integracja zna RCEm. Przy pierwszym
+  uruchomieniu jest to do 14 miesięcy wstecz. Energia sprzed tej daty nie jest
+  wyceniana, bo nie ma dla niej ceny. Raz ustalony początek się nie przesuwa.
+  Ceny miesięcy, które wypadają z bieżącej listy PSE, integracja zachowuje, żeby
+  starsza część historii nie straciła wyceny.
+- **Zmiana źródła.** Po wskazaniu innej statystyki energii oddanej integracja
+  usuwa dotychczasową statystykę zwrotu i buduje ją od nowa. Dzięki temu sumy
+  nie mieszają danych z dwóch liczników.
+- **Luki w danych.** Jeśli Home Assistant nie działał i między odczytami brakuje
+  kilku godzin, cała energia z przerwy dostaje cenę miesiąca godziny, w której
+  odczyt się pojawił. Ma to znaczenie tylko wtedy, gdy przerwa obejmuje przełom
+  miesięcy.
+- **Spadek sumy.** Jeśli narastająca suma energii oddanej zmaleje, import zwrotu
+  zostaje wstrzymany, żeby nie zapisać błędnych kwot. Ten sam spadek zatrzymuje
+  import w każdym kolejnym przeliczeniu, dopóki nie zostanie usunięty ze
+  statystyki źródłowej.
+
+#### Wymagania
+
+- Tryb rozliczenia energii wprowadzonej do sieci ustawiony na `RCEm`.
+- Narastająca statystyka energii **oddanej** do sieci w `kWh` z sumą
+  (`has_sum: true`). Może to być zwykły sensor licznika albo statystyka
+  zewnętrzna importera. Nie wybieraj statystyki energii pobranej.
+
+#### Włączenie
+
+1. Otwórz **Ustawienia → Urządzenia i usługi → Polish Energy Prices →
+   Konfiguruj**.
+2. Ustaw **Rozliczenie energii wprowadzonej do sieci** na `RCEm` i włącz
+   **Utwórz statystykę zwrotu dla RCEm**.
+3. W kolejnym kroku wskaż narastającą statystykę energii oddanej do sieci.
+4. Zapisz ustawienia i w **Narzędzia deweloperskie → Statystyki** poczekaj na
+   nową statystykę:
+
+   ```text
+   polish_energy_price:<id_wpisu>_compensation_rcem
+   ```
+
+   Pierwsze przeliczenie historii może potrwać kilka minut.
+
+#### Wpięcie w panel Energia
+
+1. W konfiguracji panelu Energia otwórz sekcję **Zwrot do sieci**.
+2. Jako statystykę energii pozostaw tę samą statystykę energii oddanej, którą
+   wskazano integracji.
+3. W sposobie śledzenia zwrotu wybierz opcję statystyki śledzącej całkowitą
+   kwotę zwrotu i wskaż `polish_energy_price:…_compensation_rcem`.
+4. Nie wskazuj jednocześnie encji **Cena energii wprowadzonej do sieci**. Ma
+   ona jednostkę `PLN/kWh`, a statystyka zwrotu jest kwotą narastającą w `PLN`.
+
+#### Czego statystyka nie robi
+
+- Nie liczy salda depozytu prosumenckiego, jego wygasania ani zwrotu
+  niewykorzystanych środków. Pokazuje wartość energii oddanej, jaka trafia do
+  depozytu.
+- Nie dolicza VAT ani akcyzy. RCEm jest ceną netto, a jedynym mnożnikiem jest
+  współczynnik korygujący depozytu.
+- Działa tylko w Home Assistant, bo korzysta z bazy statystyk rejestratora.
+  Usługa Docker i MQTT publikują wyłącznie bieżącą cenę.
+- Nie jest potrzebna w trybie RCE.
 
 ### Usługa Docker: HTTP i MQTT
 

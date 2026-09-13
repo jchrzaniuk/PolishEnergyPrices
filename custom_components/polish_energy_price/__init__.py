@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .compensation_statistics import RcemCompensationStatisticsManager
     from .coordinator import EnergyPriceCoordinator
     from .cost_statistics import ExternalCostStatisticsManager
 
@@ -19,6 +20,7 @@ class PolishEnergyPriceRuntimeData:
 
     coordinator: EnergyPriceCoordinator
     cost_statistics: ExternalCostStatisticsManager | None = None
+    compensation_statistics: RcemCompensationStatisticsManager | None = None
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -28,6 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     from homeassistant.helpers.event import async_track_time_interval
 
+    from .compensation_statistics import RcemCompensationStatisticsManager
     from .const import PLATFORMS
     from .coordinator import EnergyPriceCoordinator
     from .cost_statistics import ExternalCostStatisticsManager
@@ -35,11 +38,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = EnergyPriceCoordinator(hass, entry)
     await coordinator.async_initialize()
     cost_statistics = ExternalCostStatisticsManager(hass, entry, coordinator)
-    entry.runtime_data = PolishEnergyPriceRuntimeData(coordinator, cost_statistics)
+    compensation_statistics = RcemCompensationStatisticsManager(
+        hass, entry, coordinator
+    )
+    entry.runtime_data = PolishEnergyPriceRuntimeData(
+        coordinator, cost_statistics, compensation_statistics
+    )
     await cost_statistics.async_refresh()
+    await compensation_statistics.async_refresh()
     entry.async_on_unload(
         async_track_time_interval(
             hass, cost_statistics.async_refresh, timedelta(hours=1)
+        )
+    )
+    entry.async_on_unload(
+        async_track_time_interval(
+            hass, compensation_statistics.async_refresh, timedelta(hours=1)
         )
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
