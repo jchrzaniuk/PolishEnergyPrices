@@ -1,6 +1,7 @@
 {
   "domain": "polish_energy_price",
   "name": "Polish Energy Prices",
+  "after_dependencies": ["energy"],
   "codeowners": ["@jchrzaniuk"],
   "config_flow": true,
   "documentation": "https://github.com/jchrzaniuk/PolishEnergyPrices",

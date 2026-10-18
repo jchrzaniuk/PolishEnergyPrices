@@ -8,6 +8,37 @@ import math
 from typing import Iterable, Mapping, TypedDict
 
 
+def grid_statistics_from_energy_prefs(
+    prefs: Mapping | None,
+) -> tuple[list[str], list[str]]:
+    """Collect ordered, unique import and export statistics from grid sources."""
+
+    imports: list[str] = []
+    exports: list[str] = []
+    if not isinstance(prefs, Mapping):
+        return imports, exports
+    sources = prefs.get("energy_sources")
+    if not isinstance(sources, list):
+        return imports, exports
+
+    def collect(value: object) -> None:
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                if key in ("stat_energy_from", "stat_energy_to"):
+                    target = imports if key == "stat_energy_from" else exports
+                    if isinstance(item, str) and item and item not in target:
+                        target.append(item)
+                collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    for source in sources:
+        if isinstance(source, Mapping) and source.get("type") == "grid":
+            collect(source)
+    return imports, exports
+
+
 class SourceStatisticRow(TypedDict, total=False):
     """Subset of a Home Assistant statistics result used by the bridge."""
 

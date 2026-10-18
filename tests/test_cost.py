@@ -21,6 +21,73 @@ sys.modules[SPEC.name] = cost
 SPEC.loader.exec_module(cost)
 
 
+class GridEnergyPreferencesTests(unittest.TestCase):
+    def test_legacy_flow_from_and_flow_to(self) -> None:
+        prefs = {"energy_sources": [{
+            "type": "grid",
+            "flow_from": [{"stat_energy_from": "sensor.import"}],
+            "flow_to": [{"stat_energy_to": "meter:export"}],
+        }]}
+        self.assertEqual(
+            (["sensor.import"], ["meter:export"]),
+            cost.grid_statistics_from_energy_prefs(prefs),
+        )
+
+    def test_multiple_imports_preserve_order_across_grid_sources(self) -> None:
+        prefs = {"energy_sources": [
+            {"type": "grid", "flow_from": [{"stat_energy_from": "meter:z"}]},
+            {"type": "grid", "nested": {"flows": [
+                {"stat_energy_from": "meter:a"},
+                {"stat_energy_to": "meter:out"},
+            ]}},
+        ]}
+        self.assertEqual(
+            (["meter:z", "meter:a"], ["meter:out"]),
+            cost.grid_statistics_from_energy_prefs(prefs),
+        )
+
+    def test_non_grid_sources_are_ignored(self) -> None:
+        prefs = {"energy_sources": [
+            {"type": "solar", "stat_energy_from": "sensor.solar",
+             "nested": [{"stat_energy_to": "sensor.solar_export"}]},
+            {"stat_energy_from": "sensor.unknown"},
+            {"type": "grid", "stat_energy_from": "sensor.grid"},
+        ]}
+        self.assertEqual(
+            (["sensor.grid"], []), cost.grid_statistics_from_energy_prefs(prefs)
+        )
+
+    def test_missing_and_malformed_preferences(self) -> None:
+        for prefs in (
+            None, "garbage", 42, [], {},
+            {"energy_sources": None}, {"energy_sources": "grid"},
+            {"energy_sources": {"type": "grid", "stat_energy_from": "sensor.x"}},
+            {"energy_sources": [None, 42, "grid", [], {
+                "type": "grid", "stat_energy_from": "", "stat_energy_to": 7,
+                "nested": [{"stat_energy_from": None, "stat_energy_to": False}],
+            }]},
+        ):
+            with self.subTest(prefs=prefs):
+                self.assertEqual(([], []), cost.grid_statistics_from_energy_prefs(prefs))
+
+    def test_duplicates_are_removed_independently_in_each_direction(self) -> None:
+        prefs = {"energy_sources": [
+            {"type": "grid", "flow_from": [
+                {"stat_energy_from": "meter:shared"},
+                {"stat_energy_from": "meter:shared"},
+            ], "flow_to": [
+                {"stat_energy_to": "meter:z"},
+                {"stat_energy_to": "meter:shared"},
+            ]},
+            {"type": "grid", "stat_energy_from": "meter:shared",
+             "stat_energy_to": "meter:z"},
+        ]}
+        self.assertEqual(
+            (["meter:shared"], ["meter:z", "meter:shared"]),
+            cost.grid_statistics_from_energy_prefs(prefs),
+        )
+
+
 class CostStatisticsTests(unittest.TestCase):
     def test_generated_statistic_id_is_lowercase(self) -> None:
         self.assertEqual(

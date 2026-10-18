@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -54,6 +55,7 @@ from .const import (
     PRICE_SOURCE_TAURON_G14DYNAMIC,
     external_statistic_key,
 )
+from .cost import grid_statistics_from_energy_prefs
 from .tariff import (
     G13S_BASE_ZONES,
     G13S_PERIODS,
@@ -397,6 +399,37 @@ def _external_statistics_schema(
     return vol.Schema(schema)
 
 
+async def _energy_prefs(hass: HomeAssistant) -> Mapping | None:
+    """Read optional Energy dashboard preferences without blocking the flow."""
+
+    try:
+        from homeassistant.components.energy.data import async_get_manager
+
+        return (await async_get_manager(hass)).data
+    except Exception:  # noqa: BLE001 - Optional Energy preferences must not break setup.
+        return None
+
+
+async def _energy_statistic_defaults(
+    hass: HomeAssistant,
+    statistic_options: list[SelectOptionDict],
+    operator: str | None = None,
+    group: str | None = None,
+) -> dict[str, str]:
+    """Suggest only unambiguous grid statistics available in the selector."""
+
+    imports, exports = grid_statistics_from_energy_prefs(await _energy_prefs(hass))
+    available = {option["value"] for option in statistic_options}
+    defaults: dict[str, str] = {}
+    if len(exports) == 1 and exports[0] in available:
+        defaults[CONF_EXPORT_STATISTIC] = exports[0]
+    if operator is not None and group is not None and group.lower() != "g13s":
+        zones = get_tariff(operator, group).zones
+        if len(zones) == 1 and len(imports) == 1 and imports[0] in available:
+            defaults[external_statistic_key(zones[0])] = imports[0]
+    return defaults
+
+
 async def _energy_statistic_options(
     hass: HomeAssistant,
 ) -> list[SelectOptionDict]:
@@ -579,6 +612,15 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._data.update(user_input)
                 return await self._after_external_statistics()
         statistic_options = await _energy_statistic_options(self.hass)
+        defaults = await _energy_statistic_defaults(
+            self.hass,
+            statistic_options,
+            self._data[CONF_OPERATOR],
+            self._data[CONF_TARIFF],
+        )
+        defaults.update(self._data)
+        if user_input is not None:
+            defaults.update(user_input)
         if not statistic_options:
             errors["base"] = "no_energy_statistics"
         return self.async_show_form(
@@ -587,7 +629,7 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._data[CONF_OPERATOR],
                 self._data[CONF_TARIFF],
                 statistic_options,
-                user_input,
+                defaults,
             ),
             errors=errors,
         )
@@ -611,12 +653,16 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._data[CONF_EXPORT_STATISTIC] = selected
                 return self._finish()
         statistic_options = await _energy_statistic_options(self.hass)
+        defaults = await _energy_statistic_defaults(self.hass, statistic_options)
+        defaults.update(self._data)
+        if user_input is not None:
+            defaults.update(user_input)
         if not statistic_options:
             errors["base"] = "no_energy_statistics"
         return self.async_show_form(
             step_id="export_statistic",
             data_schema=_export_statistic_schema(
-                statistic_options, self._data.get(CONF_EXPORT_STATISTIC)
+                statistic_options, defaults.get(CONF_EXPORT_STATISTIC)
             ),
             errors=errors,
         )
@@ -800,6 +846,15 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
             **self._options,
         }
         statistic_options = await _energy_statistic_options(self.hass)
+        defaults = await _energy_statistic_defaults(
+            self.hass,
+            statistic_options,
+            self.config_entry.data[CONF_OPERATOR],
+            self.config_entry.data[CONF_TARIFF],
+        )
+        defaults.update(current)
+        if user_input is not None:
+            defaults.update(user_input)
         if not statistic_options:
             errors["base"] = "no_energy_statistics"
         return self.async_show_form(
@@ -808,7 +863,7 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 self.config_entry.data[CONF_OPERATOR],
                 self.config_entry.data[CONF_TARIFF],
                 statistic_options,
-                current if user_input is None else user_input,
+                defaults,
             ),
             errors=errors,
         )
@@ -837,12 +892,16 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 self._options[CONF_EXPORT_STATISTIC] = selected
                 return self.async_create_entry(data=self._options)
         statistic_options = await _energy_statistic_options(self.hass)
+        defaults = await _energy_statistic_defaults(self.hass, statistic_options)
+        defaults.update(current)
+        if user_input is not None:
+            defaults.update(user_input)
         if not statistic_options:
             errors["base"] = "no_energy_statistics"
         return self.async_show_form(
             step_id="export_statistic",
             data_schema=_export_statistic_schema(
-                statistic_options, current.get(CONF_EXPORT_STATISTIC)
+                statistic_options, defaults.get(CONF_EXPORT_STATISTIC)
             ),
             errors=errors,
         )
