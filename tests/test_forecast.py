@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import unittest
 
 from custom_components.polish_energy_price.forecast import (
+    UNRECORDED_FORECAST_ATTRIBUTES,
     build_forecast,
     forecast_attributes,
     forecast_to_dict,
@@ -244,6 +245,16 @@ class ForecastTests(unittest.TestCase):
         self.assertEqual("2026-01-01", attributes["forecast_valid_from"])
         self.assertEqual("2026-12-31", attributes["forecast_valid_until"])
         self.assertNotIn("network_gross", attributes["forecast"][0])
+
+    def test_unrecorded_forecast_attributes_are_exposed(self) -> None:
+        forecast = build_forecast(
+            get_tariff("tauron", "G11"),
+            data_for("tauron", "G11"),
+            at("2026-08-04T12:15:00+02:00"),
+        )
+        self.assertLessEqual(
+            UNRECORDED_FORECAST_ATTRIBUTES, forecast_attributes(forecast).keys()
+        )
 
     def test_resizes_a_precomputed_forecast(self) -> None:
         original = build_forecast(

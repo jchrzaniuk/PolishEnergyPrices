@@ -33,7 +33,11 @@ from .const import (
 )
 from .coordinator import EnergyPriceCoordinator
 from .export_price import ExportPrice, export_price_at, upcoming_export_periods
-from .forecast import build_forecast, forecast_attributes
+from .forecast import (
+    UNRECORDED_FORECAST_ATTRIBUTES,
+    build_forecast,
+    forecast_attributes,
+)
 from .tariff import (
     DynamicZoneUnavailable,
     EXCISE_NET_PLN_KWH,
@@ -108,6 +112,7 @@ PRICE_COMPONENTS = (
 class PolishEnergyPriceSensor(CoordinatorEntity[EnergyPriceCoordinator], SensorEntity):
     """Current all-in gross price of one kWh."""
 
+    _unrecorded_attributes = UNRECORDED_FORECAST_ATTRIBUTES
     _attr_has_entity_name = True
     # Keep the UI consistently Polish regardless of the browser language.
     # The unique ID stays unchanged, so existing Energy dashboard mappings do

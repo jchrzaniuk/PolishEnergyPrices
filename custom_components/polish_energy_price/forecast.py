@@ -236,6 +236,10 @@ def slot_to_dict(slot: ForecastSlot) -> dict[str, object]:
     }
 
 
+# Keep the large forecast and timestamp that changes on every state write out of Recorder.
+UNRECORDED_FORECAST_ATTRIBUTES = frozenset({"forecast", "forecast_generated_at"})
+
+
 def forecast_attributes(forecast: PriceForecast) -> dict[str, object]:
     """Build the compact Home Assistant forecast attributes."""
 
