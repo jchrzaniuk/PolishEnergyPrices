@@ -312,7 +312,7 @@ def _prices_schema(
                     NumberSelectorConfig(
                         min=0,
                         max=10,
-                        step=0.0001,
+                        step="any",
                         mode=NumberSelectorMode.BOX,
                         unit_of_measurement="PLN/kWh",
                     )
@@ -327,7 +327,7 @@ def _prices_schema(
                 NumberSelectorConfig(
                     min=0,
                     max=10,
-                    step=0.0001,
+                    step="any",
                     mode=NumberSelectorMode.BOX,
                     unit_of_measurement="PLN/kWh",
                 )
