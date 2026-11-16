@@ -140,6 +140,80 @@ class UreParserTests(unittest.TestCase):
             ure.parse_ure_workbook(content, "pge", "G12n"),
         )
 
+    def test_pge_generic_g_titles_resolve_to_base_groups(self) -> None:
+        def pge(title: str, category: str, kind: str, h: float, i: float | None = None):
+            data = dict(
+                A="PGE Obrót S.A.",
+                B=title,
+                C=category,
+                D=kind,
+                F="PGE Dystrybucja S.A.",
+            )
+            if i is None:
+                data["G"] = h
+            else:
+                data["H"], data["I"] = h, i
+            return row(**data)
+
+        generic = "Taryfa dla energii elektrycznej dla odbiorców z grup taryfowych G"
+        content = workbook(
+            [
+                pge(generic, "G11 (stała cena)", "Regulowana", 0.6189),
+                pge(generic, "G12x (2 strefy)", "Regulowana", 0.7018, 0.4635),
+                pge(f"{generic} (G12n)", "G12x (2 strefy)", "Regulowana", 0.7221, 0.5271),
+                pge(f"{generic} (G12w)", "G12x (2 strefy)", "Regulowana", 0.684, 0.4873),
+                pge("Oferta rynkowa", "G11 (stała cena)", "Wolnorynkowa", 0.9),
+                pge("Oferta rynkowa", "G12x (2 strefy)", "Wolnorynkowa", 0.9, 0.9),
+            ]
+        )
+        self.assertEqual({"calodobowa": 0.6189}, ure.parse_ure_workbook(content, "pge", "G11"))
+        self.assertEqual(
+            {"dzienna": 0.7018, "nocna": 0.4635},
+            ure.parse_ure_workbook(content, "pge", "G12"),
+        )
+        self.assertEqual(
+            {"dzienna": 0.7221, "nocna": 0.5271},
+            ure.parse_ure_workbook(content, "pge", "G12w"),
+        )
+        self.assertEqual(
+            {"dzienna": 0.684, "nocna": 0.4873},
+            ure.parse_ure_workbook(content, "pge", "G12n"),
+        )
+
+    def test_enea_sprzedaz_name_skips_p_groups(self) -> None:
+        def enea(title: str, category: str, h: float, i: float | None = None):
+            data = dict(
+                A="Enea Sprzedaż Sp. z o.o. ",
+                B=title,
+                C=category,
+                D="Regulowana",
+                F="ENEA Operator Sp. z o.o.",
+            )
+            if i is None:
+                data["G"] = h
+            else:
+                data["H"], data["I"] = h, i
+            return row(**data)
+
+        content = workbook(
+            [
+                enea("Taryfa. Symbol gr. taryfowej G11p", "G11 (stała cena)", 0.9),
+                enea("Taryfa. Symbol grupy taryfowej G11", "G11 (stała cena)", 0.6187),
+                enea("Taryfa. Symbol gr. taryfowej G12p", "G12x (2 strefy)", 0.9, 0.9),
+                enea("Taryfa. Symbol grupy taryfowej G12", "G12x (2 strefy)", 0.717, 0.4205),
+                enea("Taryfa. Symbol grupy taryfowej G12w", "G12x (2 strefy)", 0.8079, 0.4323),
+            ]
+        )
+        self.assertEqual({"calodobowa": 0.6187}, ure.parse_ure_workbook(content, "enea", "G11"))
+        self.assertEqual(
+            {"dzienna": 0.717, "nocna": 0.4205},
+            ure.parse_ure_workbook(content, "enea", "G12"),
+        )
+        self.assertEqual(
+            {"szczytowa": 0.8079, "pozaszczytowa": 0.4323},
+            ure.parse_ure_workbook(content, "enea", "G12w"),
+        )
+
     def test_rejects_workbook_without_excise_and_vat_declaration(self) -> None:
         content = workbook([], includes_taxes=False)
         with self.assertRaisesRegex(ValueError, "akcyzą i VAT"):

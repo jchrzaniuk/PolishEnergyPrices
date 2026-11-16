@@ -28,12 +28,12 @@ _PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 _N = f"{{{_MAIN_NS}}}"
 MAX_UNCOMPRESSED_WORKBOOK_BYTES = 25_000_000
 
-_SELLER_MARKERS = {
+_SELLER_MARKERS: dict[str, str | tuple[str, ...]] = {
     "tauron": "tauron sprzedaz",
     "pge": "pge obrot",
     "energa": "energa obrot",
     "stoen": "e on polska",
-    "enea": "enea s a",
+    "enea": ("enea s a", "enea sprzedaz"),
 }
 
 _AREA_MARKERS = {
@@ -177,27 +177,38 @@ def _contains_group(text: str, group: str) -> bool:
     )
 
 
+_GROUP_SYMBOL = re.compile(r"(?:^| )g1[1-4][a-z]*(?: |$)")
+
+
 def _matching_rows(
     rows: list[dict[int, object]], operator: str, group: str
 ) -> list[dict[int, object]]:
-    seller = _SELLER_MARKERS[operator]
+    sellers = _SELLER_MARKERS[operator]
+    if isinstance(sellers, str):
+        sellers = (sellers,)
     area = _AREA_MARKERS[operator]
     matches: list[dict[int, object]] = []
     for row in rows:
-        if seller not in _normalise(row.get(0)) or area not in _normalise(row.get(5)):
+        seller_name = _normalise(row.get(0))
+        if not any(s in seller_name for s in sellers) or area not in _normalise(
+            row.get(5)
+        ):
             continue
         if operator != "stoen" and _normalise(row.get(3)) != "regulowana":
             continue
         searchable = _normalise(f"{row.get(1, '')} {row.get(23, '')}")
         category = _normalise(row.get(2))
+        if operator != "stoen" and not _GROUP_SYMBOL.search(searchable):
+            # A regulated row without any group symbol (PGE's generic G11/G12
+            # titles, TAURON and ENERGA G11) is the base group of its category.
+            # E.ON has many G11 offers, so STOEN keeps requiring a symbol.
+            if category.startswith(group.lower()) and group in {"G11", "G12", "G13"}:
+                matches.append(row)
+            continue
         if group == "G11" and category.startswith("g11"):
-            # ENEA also publishes G11p and E.ON has other G11 offers.  TAURON's
-            # regulated row is the only one whose title omits the group symbol.
-            if operator not in {"tauron", "energa"} and not _contains_group(
-                _normalise(row.get(1)), "g11"
-            ):
-                continue
-            matches.append(row)
+            # ENEA also publishes G11p, so an explicit symbol must be G11.
+            if _contains_group(_normalise(row.get(1)), "g11"):
+                matches.append(row)
         elif group == "G13" and category.startswith("g13"):
             matches.append(row)
         elif category.startswith("g12") and _contains_group(searchable, group):
