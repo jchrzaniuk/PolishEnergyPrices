@@ -11,12 +11,19 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from io import BytesIO
 import json
+import logging
 import re
 from urllib.parse import urlencode, urljoin, urlparse
 
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
+# The TAURON 2026 tariff rotates only its column headers on one page, and the
+# parser matches rows by group symbol, so pypdf's "incomplete output" warning
+# is noise.  Other warnings from this logger still pass.
+logging.getLogger("pypdf._text_extraction._layout_mode._fixed_width_page").addFilter(
+    lambda record: not record.getMessage().startswith("Rotated text discovered")
+)
 
 OZE_RATES_PAGE = "https://bip.ure.gov.pl/bip/odnawialne-zrodla-energ/stawki-oplaty-oze"
 ELI_API = "https://api.sejm.gov.pl/eli"

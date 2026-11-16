@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 from pathlib import Path
 import sys
 import unittest
@@ -22,6 +23,15 @@ SPEC.loader.exec_module(official)
 
 
 class OfficialTariffTests(unittest.TestCase):
+    def test_pypdf_rotated_text_warning_is_filtered_but_others_pass(self) -> None:
+        logger = logging.getLogger(
+            "pypdf._text_extraction._layout_mode._fixed_width_page"
+        )
+        with self.assertNoLogs(logger, logging.WARNING):
+            logger.warning("Rotated text discovered. Output will be incomplete.")
+        with self.assertLogs(logger, logging.WARNING):
+            logger.warning("Something else")
+
     def test_discovers_text_extract_and_rejects_gross_price_document(self) -> None:
         page = """
         <a href="/stawki-brutto-2026.pdf">TAURON Dystrybucja stawki brutto 2026</a>
