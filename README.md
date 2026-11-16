@@ -261,6 +261,10 @@ Aby stale widzieć całe rozbicie, dodaj do pulpitu zwykłą kartę **Encje**, a
 następnie wybierz główną cenę i wymienione wyżej składniki. Nie wymaga to HACS,
 karty niestandardowej ani ręcznych sensorów szablonowych.
 
+Dla taryf wielostrefowych (bez G11 i G13s) integracja tworzy też zwykłe encje
+**Cena energii brutto — strefa …** ze stałą ceną każdej strefy. Przydają się na
+pulpitach i w automatyzacjach.
+
 ### Liczniki udostępniające tylko statystyki zewnętrzne
 
 Niektóre importery danych — w szczególności godzinowy importer TAURON AMIplus —

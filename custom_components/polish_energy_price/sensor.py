@@ -45,8 +45,11 @@ from .tariff import (
     SELLER_NAMES,
     VAT,
     WARSAW,
+    ZONE_LABELS,
     get_tariff,
     price_at,
+    price_for_zone,
+    zone_price_keys,
 )
 
 
@@ -69,7 +72,13 @@ async def async_setup_entry(
         )
         for key, name, icon in PRICE_COMPONENTS
     ]
-    entities = [sensor, *component_sensors]
+    zone_sensors = [
+        PolishEnergyZonePriceSensor(
+            entry, entry.runtime_data.coordinator, sensor, zone
+        )
+        for zone in zone_price_keys(sensor._tariff)
+    ]
+    entities = [sensor, *component_sensors, *zone_sensors]
     settings = {**entry.data, **entry.options}
     export_settlement = settings.get(CONF_EXPORT_SETTLEMENT, EXPORT_SETTLEMENT_OFF)
     if export_settlement != EXPORT_SETTLEMENT_OFF:
@@ -423,6 +432,64 @@ class PolishEnergyPriceComponentSensor(
         if not self.available:
             return None
         return self._price_sensor.price_components()[self._component_key]
+
+
+class PolishEnergyZonePriceSensor(
+    CoordinatorEntity[EnergyPriceCoordinator], SensorEntity
+):
+    """Fixed gross price of one tariff zone, independent of the current hour."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:cash"
+    _attr_native_unit_of_measurement = "PLN/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 4
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        coordinator: EnergyPriceCoordinator,
+        price_sensor: PolishEnergyPriceSensor,
+        zone: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._tariff = price_sensor._tariff
+        self._zone = zone
+        label = ZONE_LABELS[zone]
+        # "pozostałe godziny" reads wrong after the word "strefa".
+        prefix = "" if label.endswith("godziny") else "strefa "
+        self._attr_name = f"Cena energii brutto — {prefix}{label}"
+        self._attr_unique_id = f"{entry.entry_id}_zone_price_{zone}"
+        self._attr_suggested_object_id = f"cena_strefa_{zone}"
+        self._attr_device_info = price_sensor.device_info
+
+    @property
+    def available(self) -> bool:
+        """Zone prices are fixed, so dynamic zone assignments do not matter."""
+
+        return super().available and self.coordinator.data.is_valid_on(
+            dt_util.now().date()
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the gross price of this zone in PLN/kWh."""
+
+        if not self.available:
+            return None
+        settings = {**self._entry.data, **self._entry.options}
+        energy_prices = settings.get(CONF_CUSTOM_PRICES)
+        if settings.get(CONF_PRICE_SOURCE) != PRICE_SOURCE_CUSTOM:
+            energy_prices = self.coordinator.data.prices
+        return price_for_zone(
+            self._tariff,
+            self._zone,
+            custom_energy=energy_prices,
+            distribution_net=self.coordinator.data.distribution_net,
+            system_net=self.coordinator.data.system_total,
+        ).total
 
 
 class PolishEnergyExportPriceSensor(

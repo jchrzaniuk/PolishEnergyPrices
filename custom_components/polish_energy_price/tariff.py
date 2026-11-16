@@ -722,6 +722,14 @@ def price_for_zone(
     )
 
 
+def zone_price_keys(tariff: TariffDefinition) -> tuple[str, ...]:
+    """Return zones that get a fixed-price entity (multi-zone, not G13s)."""
+
+    if len(tariff.zones) < 2 or tariff.group.casefold() == "g13s":
+        return ()
+    return tariff.zones
+
+
 class DynamicZoneUnavailable(ValueError):
     """The external source has no reliable zone for the requested hour."""
 

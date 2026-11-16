@@ -206,6 +206,27 @@ class TariffTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "formatu"):
             tariff.parse_day_hours("six to thirteen")
 
+    def test_zone_price_keys_cover_multi_zone_tariffs_except_g13s(self) -> None:
+        keys = tariff.zone_price_keys
+        self.assertEqual((), keys(tariff.get_tariff("stoen", "G11")))
+        self.assertEqual((), keys(tariff.get_tariff("tauron", "G13s")))
+        self.assertEqual(2, len(keys(tariff.get_tariff("tauron", "G12w"))))
+        self.assertEqual(3, len(keys(tariff.get_tariff("tauron", "G13"))))
+        g14 = tariff.get_tariff("tauron", "G14dynamic")
+        self.assertEqual(g14.zones, keys(g14))
+        self.assertGreaterEqual(len(keys(g14)), 2)
+
+    def test_zone_price_matches_price_at_for_the_active_zone(self) -> None:
+        definition = tariff.get_tariff("tauron", "G12w")
+        for value in (
+            "2026-03-10T08:00:00+01:00",
+            "2026-03-10T22:00:00+01:00",
+            "2026-03-14T10:00:00+01:00",
+        ):
+            current = tariff.price_at(definition, at(value))
+            fixed = tariff.price_for_zone(definition, current.zone_key)
+            self.assertEqual(current.total, fixed.total)
+
 
 if __name__ == "__main__":
     unittest.main()
