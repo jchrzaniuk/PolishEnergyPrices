@@ -30,6 +30,7 @@ from homeassistant.components.recorder.statistics import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 from homeassistant.util.unit_conversion import EnergyConverter
 
@@ -88,21 +89,41 @@ class RcemCompensationStatisticsManager:
         async with self._lock:
             try:
                 await self._async_refresh()
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError) as err:
                 _LOGGER.exception(
                     "Invalid RCEm compensation statistics configuration"
+                )
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    f"compensation_rcem_{self.entry.entry_id}",
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="compensation_rcem_failed",
+                    translation_placeholders={
+                        "entry": self.entry.title,
+                        "reason": str(err),
+                    },
                 )
             except Exception:  # noqa: BLE001 - recorder failures must not break pricing
                 _LOGGER.exception("Could not refresh RCEm compensation statistics")
 
+    def _delete_issue(self) -> None:
+        ir.async_delete_issue(
+            self.hass, DOMAIN, f"compensation_rcem_{self.entry.entry_id}"
+        )
+
     async def _async_refresh(self) -> None:
         settings = self._settings()
         if settings.get(CONF_EXPORT_SETTLEMENT) != EXPORT_SETTLEMENT_RCEM:
+            self._delete_issue()
             return
         if not settings.get(CONF_EXPORT_STATISTICS, False):
+            self._delete_issue()
             return
         source_id = settings.get(CONF_EXPORT_STATISTIC)
         if not source_id:
+            self._delete_issue()
             return
         source_id = str(source_id)
 
@@ -112,10 +133,9 @@ class RcemCompensationStatisticsManager:
             **(self.coordinator.data.rcem_prices or {}),
         }
         if not prices:
-            _LOGGER.warning(
+            raise ValueError(
                 "Brak żadnej znanej ceny RCEm — statystyka zwrotu wstrzymana"
             )
-            return
 
         source_changed = stored.get("source") != source_id
         start = (
@@ -179,14 +199,22 @@ class RcemCompensationStatisticsManager:
             )
             return priced.value if priced else None
 
+        resets: list[datetime] = []
         rows = interval_cumulative_value_rows(
-            source_rows.get(source_id, []), price_at
+            source_rows.get(source_id, []), price_at, resets.append
         )
-        if not rows:
+        if resets:
             _LOGGER.warning(
-                "Brak godzinowych danych energii oddanej dla %s", source_id
+                "Suma statystyki %s spadła %d raz(y), pierwszy raz %s — "
+                "przedziały potraktowano jak reset licznika",
+                source_id,
+                len(resets),
+                resets[0],
             )
-            return
+        if not rows:
+            raise ValueError(
+                f"Brak godzinowych danych energii oddanej dla {source_id}"
+            )
 
         target_id = compensation_statistic_id(self.entry.entry_id)
         if source_changed:
@@ -205,6 +233,7 @@ class RcemCompensationStatisticsManager:
                 )
                 rows = [row for row in rows if row["start"] >= cutoff]
         if not rows:
+            self._delete_issue()
             return
 
         async_add_external_statistics(
@@ -233,3 +262,4 @@ class RcemCompensationStatisticsManager:
                 "last_refresh": datetime.now(timezone.utc).isoformat(),
             }
         )
+        self._delete_issue()

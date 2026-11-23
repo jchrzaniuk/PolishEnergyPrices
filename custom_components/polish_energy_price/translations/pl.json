@@ -213,5 +213,11 @@
         "name": "Cena energii brutto"
       }
     }
+  },
+  "issues": {
+    "compensation_rcem_failed": {
+      "title": "Statystyka zwrotu RCEm nie została utworzona",
+      "description": "Nie udało się utworzyć statystyki zwrotu RCEm dla wpisu {entry}. Przyczyna: {reason}. Po usunięciu przyczyny ta naprawa zniknie sama przy następnym odświeżeniu (co godzinę albo po ponownym uruchomieniu wpisu)."
+    }
   }
 }

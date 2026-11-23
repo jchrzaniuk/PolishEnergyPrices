@@ -213,5 +213,11 @@
         "name": "Cena energii brutto"
       }
     }
+  },
+  "issues": {
+    "compensation_rcem_failed": {
+      "title": "RCEm export compensation statistic was not created",
+      "description": "The RCEm export compensation statistic could not be created for the entry {entry}. Reason: {reason}. Once the cause is fixed, this repair disappears by itself on the next refresh (hourly, or after the entry is reloaded)."
+    }
   }
 }

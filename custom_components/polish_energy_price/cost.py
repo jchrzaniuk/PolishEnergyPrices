@@ -148,6 +148,7 @@ def hourly_cumulative_cost_rows(
 def interval_cumulative_value_rows(
     rows: Iterable[Mapping[str, float | None]],
     price_at: Callable[[datetime], float | None],
+    on_reset: Callable[[datetime], None] | None = None,
 ) -> list[CostStatisticRow]:
     """Price consecutive cumulative-energy rows using the LATER row's rate.
 
@@ -165,6 +166,11 @@ def interval_cumulative_value_rows(
     The first usable energy row is a zero-value baseline. A gap between two
     rows longer than an hour is not an error: the whole delta is priced at
     the later row's start.
+
+    A drop of the cumulative sum (e.g. a manual correction in Developer
+    tools) is treated like a meter reset: that interval gets no value, later
+    increments are counted from the new sum, and ``on_reset`` is called with
+    the start of the interval in which the sum dropped.
     """
 
     result: list[CostStatisticRow] = []
@@ -190,8 +196,9 @@ def interval_cumulative_value_rows(
             raise ValueError("Godziny statystyki zwrotu nie są rosnące")
         delta = current_sum - previous_sum
         if delta < -1e-6:
-            raise ValueError("Narastająca statystyka zwrotu została wyzerowana")
-        if delta > 0:
+            if on_reset is not None:
+                on_reset(current_start)
+        elif delta > 0:
             price = price_at(current_start)
             if price is None or not math.isfinite(price) or price < 0:
                 raise ValueError("Cena zwrotu do sieci jest nieprawidłowa")

@@ -219,15 +219,23 @@ class IntervalCumulativeValueRowsTests(unittest.TestCase):
         result = cost.interval_cumulative_value_rows(rows, lambda _at: 2.0)
         self.assertEqual([0.0, 10.0], [row["sum"] for row in result])
 
-    def test_rejects_reset_of_cumulative_sum(self) -> None:
-        with self.assertRaisesRegex(ValueError, "wyzerowana"):
-            cost.interval_cumulative_value_rows(
-                [
-                    {"start": 0.0, "sum": 10.0},
-                    {"start": 3600.0, "sum": 1.0},
-                ],
-                lambda _at: 1.0,
-            )
+    def test_drop_of_cumulative_sum_is_treated_as_reset(self) -> None:
+        resets: list[datetime] = []
+        rows = [
+            {"start": hour * 3600.0, "sum": total}
+            for hour, total in enumerate([0, 1, 2, 0.5, 1.5])
+        ]
+        result = cost.interval_cumulative_value_rows(
+            rows, lambda _at: 1.0, resets.append
+        )
+        self.assertEqual([0.0, 1.0, 2.0, 2.0, 3.0], [row["sum"] for row in result])
+        self.assertEqual([datetime.fromtimestamp(3 * 3600.0, tz=timezone.utc)], resets)
+
+    def test_rising_sum_does_not_call_on_reset(self) -> None:
+        resets: list[datetime] = []
+        rows = [{"start": hour * 3600.0, "sum": float(hour)} for hour in range(4)]
+        cost.interval_cumulative_value_rows(rows, lambda _at: 1.0, resets.append)
+        self.assertEqual([], resets)
 
     def test_missing_price_at_positive_delta_raises(self) -> None:
         with self.assertRaisesRegex(ValueError, "nieprawidłowa"):

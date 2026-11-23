@@ -66,3 +66,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .const import PLATFORMS
 
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove the repair left by a removed config entry."""
+
+    from homeassistant.helpers import issue_registry as ir
+
+    from .const import DOMAIN
+
+    ir.async_delete_issue(hass, DOMAIN, f"compensation_rcem_{entry.entry_id}")
