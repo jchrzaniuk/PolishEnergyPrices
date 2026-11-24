@@ -513,10 +513,11 @@ Pozostałe zasady:
   kilku godzin, cała energia z przerwy dostaje cenę miesiąca godziny, w której
   odczyt się pojawił. Ma to znaczenie tylko wtedy, gdy przerwa obejmuje przełom
   miesięcy.
-- **Spadek sumy.** Jeśli narastająca suma energii oddanej zmaleje, import zwrotu
-  zostaje wstrzymany, żeby nie zapisać błędnych kwot. Ten sam spadek zatrzymuje
-  import w każdym kolejnym przeliczeniu, dopóki nie zostanie usunięty ze
-  statystyki źródłowej.
+- **Spadek sumy.** Jeśli narastająca suma energii oddanej zmaleje, na przykład
+  po ręcznej korekcie statystyki, integracja traktuje to jak wymianę licznika.
+  Godzina ze spadkiem nie dostaje kwoty, a kolejne przyrosty liczą się od nowej
+  sumy. Każde przeliczenie zapisuje w dzienniku jedno ostrzeżenie z liczbą
+  spadków i godziną pierwszego.
 
 #### Wymagania
 
@@ -539,7 +540,10 @@ Pozostałe zasady:
    polish_energy_price:<id_wpisu>_compensation_rcem
    ```
 
-   Pierwsze przeliczenie historii może potrwać kilka minut.
+   Pierwsze przeliczenie historii może potrwać kilka minut. Jeśli statystyka
+   nie powstaje, przyczynę pokazuje wpis w **Ustawienia → Naprawy**, na przykład
+   brak statystyki źródłowej albo brak znanej ceny RCEm. Wpis znika po
+   pierwszym udanym przeliczeniu.
 
 #### Wpięcie w panel Energia
 
