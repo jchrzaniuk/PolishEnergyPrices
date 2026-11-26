@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 import json
 import logging
+import math
 from typing import Any
 
 from homeassistant.components.recorder import get_instance
@@ -138,12 +139,19 @@ class ExternalCostStatisticsManager:
         signature_data: dict[str, Any] = {
             "mappings": mappings,
             "prices": prices,
+            "valid_from": self.coordinator.data.valid_from,
+            "version": 2,
         }
         if self._is_hourly_g13s:
             signature_data["meter_clock"] = self._settings().get(CONF_METER_CLOCK)
         signature = json.dumps(signature_data, sort_keys=True)
         stored = await self.store.async_load() or {}
         full_refresh = stored.get("signature") != signature
+        baselines: dict[str, float] = dict(stored.get("baselines") or {})
+        if not self._is_hourly_g13s and any(
+            zone not in baselines for zone in target_zones
+        ):
+            full_refresh = True
 
         recorder = get_instance(self.hass)
         metadata = await recorder.async_add_executor_job(
@@ -196,6 +204,9 @@ class ExternalCostStatisticsManager:
         query_start = (
             valid_from.astimezone(timezone.utc) if self._is_hourly_g13s else start
         )
+        if not self._is_hourly_g13s and full_refresh:
+            # The extra hour before valid_from supplies the zero-cost baseline.
+            query_start -= timedelta(hours=1)
         source_rows = await recorder.async_add_executor_job(
             partial(
                 statistics_during_period,
@@ -208,6 +219,26 @@ class ExternalCostStatisticsManager:
                 {"sum"},
             )
         )
+
+        # ponytail: a missing row at year end (HA down that hour) gives offset
+        # 0; upgrade path: use the last cost row before valid_from.
+        offsets = await recorder.async_add_executor_job(
+            partial(
+                statistics_during_period,
+                self.hass,
+                valid_from.astimezone(timezone.utc) - timedelta(hours=1),
+                valid_from.astimezone(timezone.utc),
+                {cost_statistic_id(self.entry.entry_id, zone) for zone in target_zones},
+                "hour",
+                None,
+                {"sum"},
+            )
+        )
+
+        def offset_for(zone: str) -> float:
+            rows = offsets.get(cost_statistic_id(self.entry.entry_id, zone), [])
+            value = rows[-1].get("sum") if rows else None
+            return float(value) if value is not None else 0.0
 
         imported = 0
         if self._is_hourly_g13s:
@@ -229,7 +260,7 @@ class ExternalCostStatisticsManager:
                 ).total
 
             rows = hourly_cumulative_cost_rows(
-                source_rows.get(source_id, []), price_for_hour
+                source_rows.get(source_id, []), price_for_hour, offset_for("g13s")
             )
             if not full_refresh:
                 rows = [row for row in rows if row["start"] >= output_start]
@@ -257,9 +288,31 @@ class ExternalCostStatisticsManager:
 
         if not self._is_hourly_g13s:
             for zone, source_id in mappings.items():
-                rows = cumulative_cost_rows(
-                    source_rows.get(source_id, []), prices[zone]
-                )
+                source = source_rows.get(source_id, [])
+                if full_refresh:
+                    first = next(
+                        (
+                            row
+                            for row in source
+                            if row.get("sum") is not None
+                            and math.isfinite(float(row["sum"]))
+                        ),
+                        None,
+                    )
+                    if first is None:
+                        _LOGGER.warning("No energy rows available for %s", source_id)
+                        continue
+                    baselines[zone] = float(first["sum"])
+                rows = [
+                    row
+                    for row in cumulative_cost_rows(
+                        source,
+                        prices[zone],
+                        baseline=baselines[zone],
+                        offset=offset_for(zone),
+                    )
+                    if row["start"] >= valid_from
+                ]
                 if not rows:
                     _LOGGER.warning("No energy rows available for %s", source_id)
                     continue
@@ -286,6 +339,7 @@ class ExternalCostStatisticsManager:
             await self.store.async_save(
                 {
                     "signature": signature,
+                    "baselines": baselines,
                     "last_refresh": datetime.now(timezone.utc).isoformat(),
                 }
             )

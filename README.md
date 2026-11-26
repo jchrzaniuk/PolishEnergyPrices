@@ -345,6 +345,11 @@ czemu uwzględnia opóźnione importy. Po zmianie ceny lub mapowania przelicza d
 od początku okresu obowiązywania taryfy. Koszt obejmuje te same zmienne składniki
 brutto co sensor ceny; nie zawiera miesięcznych opłat stałych.
 
+Koszt liczy się od początku obowiązywania taryfy: energia zapisana wcześniej nie
+jest wyceniana. Po zmianie taryfy na kolejny rok narastająca suma kosztu
+kontynuuje wartość z końca poprzedniego roku, więc wykres w panelu Energia nie
+robi skoku.
+
 Ta opcja jest odseparowana od zwykłej encji ceny. Liczniki udostępniające encję
 `kWh` z `state_class: total` albo `total_increasing` — np. WM-Bus, ESPHome czy
 własny podlicznik — nadal korzystają bezpośrednio z sensora bieżącej ceny i nie

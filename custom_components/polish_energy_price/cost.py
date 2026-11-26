@@ -67,9 +67,18 @@ def compensation_statistic_id(entry_id: str) -> str:
 
 
 def cumulative_cost_rows(
-    rows: Iterable[Mapping[str, float | None]], price: float
+    rows: Iterable[Mapping[str, float | None]],
+    price: float,
+    *,
+    baseline: float = 0.0,
+    offset: float = 0.0,
 ) -> list[CostStatisticRow]:
-    """Convert cumulative energy sums in kWh to cumulative gross costs in PLN."""
+    """Convert cumulative energy sums in kWh to cumulative gross costs in PLN.
+
+    Cost is ``offset + (sum - baseline) * price``: energy recorded up to
+    ``baseline`` is not priced, and ``offset`` carries the cost sum over from
+    the previous tariff year.
+    """
 
     result: list[CostStatisticRow] = []
     for row in rows:
@@ -77,7 +86,7 @@ def cumulative_cost_rows(
         energy_sum = row.get("sum")
         if start is None or energy_sum is None:
             continue
-        cost = float(energy_sum) * float(price)
+        cost = float(offset) + (float(energy_sum) - float(baseline)) * float(price)
         if not math.isfinite(cost):
             continue
         rounded = round(cost, 6)
@@ -94,10 +103,12 @@ def cumulative_cost_rows(
 def hourly_cumulative_cost_rows(
     rows: Iterable[Mapping[str, float | None]],
     price_at: Callable[[datetime], float],
+    offset: float = 0.0,
 ) -> list[CostStatisticRow]:
     """Price consecutive cumulative-energy rows using each hour's own rate.
 
-    The first usable energy row is a zero-cost baseline. A difference between
+    The first usable energy row is a baseline costing ``offset`` (zero unless
+    continuing a previous tariff year). A difference between
     two consecutive sums represents consumption during the interval beginning
     at the timestamp of the earlier row.
     """
@@ -105,7 +116,7 @@ def hourly_cumulative_cost_rows(
     result: list[CostStatisticRow] = []
     previous_start: datetime | None = None
     previous_sum: float | None = None
-    running_cost = 0.0
+    running_cost = float(offset)
     for row in rows:
         start = row.get("start")
         energy_sum = row.get("sum")
@@ -118,7 +129,10 @@ def hourly_cumulative_cost_rows(
         if previous_start is None or previous_sum is None:
             previous_start = current_start
             previous_sum = current_sum
-            result.append({"start": current_start, "state": 0.0, "sum": 0.0})
+            rounded = round(running_cost, 6)
+            result.append(
+                {"start": current_start, "state": rounded, "sum": rounded}
+            )
             continue
 
         seconds = (current_start - previous_start).total_seconds()

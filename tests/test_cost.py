@@ -122,6 +122,24 @@ class CostStatisticsTests(unittest.TestCase):
         self.assertEqual(1, len(rows))
         self.assertEqual(3.0, rows[0]["sum"])
 
+    def test_baseline_is_not_priced_and_offset_continues_previous_year(self) -> None:
+        source = [
+            {"start": 1.0, "sum": 100.0},
+            {"start": 2.0, "sum": 101.0},
+        ]
+        rows = cost.cumulative_cost_rows(source, 2.0, baseline=100.0)
+        self.assertEqual([0.0, 2.0], [row["sum"] for row in rows])
+        rows = cost.cumulative_cost_rows(source, 2.0, baseline=100.0, offset=50.0)
+        self.assertEqual([50.0, 52.0], [row["sum"] for row in rows])
+
+    def test_hourly_offset_shifts_every_row(self) -> None:
+        rows = cost.hourly_cumulative_cost_rows(
+            [{"start": 3600.0, "sum": 1.0}, {"start": 7200.0, "sum": 3.0}],
+            lambda at: 1.5,
+            offset=10.0,
+        )
+        self.assertEqual([10.0, 13.0], [row["sum"] for row in rows])
+
     def test_prices_each_hour_with_the_rate_at_interval_start(self) -> None:
         rows = cost.hourly_cumulative_cost_rows(
             [
