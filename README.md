@@ -448,6 +448,32 @@ Jej atrybuty:
 W trybie RCE to wystarcza, bo cena każdego kwadransa jest znana dzień
 wcześniej. W trybie RCEm lepiej użyć statystyki zwrotu opisanej niżej.
 
+### Bilansowanie godzinowe
+
+Sprzedawca rozlicza net-billing po bilansowaniu godzinowym (art. 4 ust. 2b
+ustawy o OZE). Dla każdej godziny odejmuje energię oddaną od pobranej, obie
+zsumowane ze wszystkich faz. Dodatni wynik to pobór, ujemny to oddanie, a
+drugi kierunek w tej godzinie wynosi zero.
+
+Dane godzinowe z liczników zwykle są surowe: w tej samej godzinie może być
+i pobór, i oddanie. Dotyczy to także danych operatora pobieranych przez API.
+eLicznik TAURON pokazuje je na stronie jako zbilansowane, ale API zwraca
+osobno pobór i oddanie.
+
+Polish Energy Prices sam nie bilansuje. Liczy z tych statystyk, które mu
+wskażesz, dlatego wskaż statystyki już zbilansowane:
+
+- **Tauron AMIplus** – włącz opcję **Obliczanie bilansowania godzinowego**
+  i przypisz statystyki `…_balanced_consumption_zone_<strefa>` do stref oraz
+  `…_balanced_generation` jako statystykę energii oddanej.
+- **Inna integracja, wM-Bus, podlicznik** – jeśli źródło nie bilansuje,
+  potrzebujesz statystyk zbilansowanych przygotowanych inaczej. Bez nich
+  statystyka zwrotu, koszty energii i szacowany stan depozytu będą zawyżone
+  o energię, która w tej samej godzinie została i pobrana, i oddana.
+
+Statystyki zbilansowane wskaż w obu miejscach: w integracji i w panelu
+Energia. Wtedy energia w panelu zgadza się z kosztami i z fakturą.
+
 ### Statystyka zwrotu dla RCEm
 
 #### Po co
@@ -674,10 +700,8 @@ podpina się go do panelu Energia.
 
 - Koszt liczony jest według bieżących cen wpisu, także dla miesięcy sprzed
   ich zmiany.
-- Integracja zakłada, że statystyki poboru i oddania są już po bilansowaniu
-  godzinowym (art. 4 ust. 2b), czyli tak jak w danych operatora. Jeśli
-  pochodzą z własnego pomiaru (falownik, licznik w rozdzielnicy), to w
-  godzinach z poborem i oddaniem jednocześnie zawyżone będą i wpływ, i koszt.
+- Integracja sama nie bilansuje godzin. Przy statystykach surowych zawyżone
+  będą i wpływ, i koszt. Zobacz [Bilansowanie godzinowe](#bilansowanie-godzinowe).
 - Krok jest miesięczny, a saldo z faktury traktowane jest jako stan na koniec
   wybranego miesiąca. Okres rozliczeniowy kończący się w środku miesiąca
   przesuwa wynik.
