@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 import voluptuous as vol
@@ -27,6 +28,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     TextSelector,
+    TextSelectorConfig,
 )
 from homeassistant.util.unit_conversion import EnergyConverter
 
@@ -35,6 +37,7 @@ from .const import (
     CONF_DAY_HOURS,
     CONF_DEPOSIT_BALANCE,
     CONF_DEPOSIT_MONTH,
+    CONF_DEPOSIT_TRANCHES,
     CONF_EXPORT_CORRECTION,
     CONF_EXPORT_SETTLEMENT,
     CONF_EXPORT_STATISTIC,
@@ -59,7 +62,10 @@ from .const import (
     external_statistic_key,
 )
 from .cost import grid_statistics_from_energy_prefs
+from .deposit import parse_tranches
+from .export_price import rcem_month_key
 from .tariff import (
+    WARSAW,
     G13S_BASE_ZONES,
     G13S_PERIODS,
     OPERATOR_NAMES,
@@ -304,6 +310,10 @@ def _export_statistic_schema(
                 CONF_DEPOSIT_MONTH,
                 description={"suggested_value": suggested.get(CONF_DEPOSIT_MONTH)},
             ): DateSelector(),
+            vol.Optional(
+                CONF_DEPOSIT_TRANCHES,
+                description={"suggested_value": suggested.get(CONF_DEPOSIT_TRANCHES)},
+            ): TextSelector(TextSelectorConfig(multiline=True)),
         }
     )
 
@@ -311,10 +321,21 @@ def _export_statistic_schema(
 def _deposit_fields(user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Optional fields left empty are stored as None, which also clears old values."""
 
-    return {
-        key: user_input.get(key)
-        for key in (CONF_DEPOSIT_BALANCE, CONF_DEPOSIT_MONTH)
+    fields = {
+        key: user_input.get(key) for key in (CONF_DEPOSIT_BALANCE, CONF_DEPOSIT_MONTH)
     }
+    tranches = str(user_input.get(CONF_DEPOSIT_TRANCHES) or "").strip()
+    return {**fields, CONF_DEPOSIT_TRANCHES: tranches or None}
+
+
+def _invalid_tranches(user_input: Mapping[str, Any]) -> bool:
+    """Whether the invoice tranches are unparsable or reach the current month."""
+
+    try:
+        parsed = parse_tranches(str(user_input.get(CONF_DEPOSIT_TRANCHES) or ""))
+    except ValueError:
+        return True
+    return bool(parsed) and max(parsed) >= rcem_month_key(datetime.now(WARSAW).date())
 
 
 def _mapped_consumption_statistics(data: dict[str, Any]) -> set[str]:
@@ -686,6 +707,8 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
             selected = str(user_input[CONF_EXPORT_STATISTIC])
             if selected in _mapped_consumption_statistics(self._data):
                 errors["base"] = "export_statistic_duplicate"
+            elif _invalid_tranches(user_input):
+                errors[CONF_DEPOSIT_TRANCHES] = "invalid_deposit_tranches"
             else:
                 self._data[CONF_EXPORT_STATISTIC] = selected
                 self._data.update(_deposit_fields(user_input))
@@ -926,6 +949,8 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
             selected = str(user_input[CONF_EXPORT_STATISTIC])
             if selected in _mapped_consumption_statistics(current):
                 errors["base"] = "export_statistic_duplicate"
+            elif _invalid_tranches(user_input):
+                errors[CONF_DEPOSIT_TRANCHES] = "invalid_deposit_tranches"
             else:
                 self._options[CONF_EXPORT_STATISTIC] = selected
                 self._options.update(_deposit_fields(user_input))

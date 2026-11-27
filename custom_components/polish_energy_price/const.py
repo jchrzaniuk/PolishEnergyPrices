@@ -21,6 +21,7 @@ CONF_EXPORT_STATISTICS = "export_statistics"
 CONF_EXPORT_STATISTIC = "export_statistic"
 CONF_DEPOSIT_BALANCE = "deposit_balance"
 CONF_DEPOSIT_MONTH = "deposit_month"
+CONF_DEPOSIT_TRANCHES = "deposit_tranches"
 
 PRICE_SOURCE_REGULATED = "regulated"
 PRICE_SOURCE_CUSTOM = "custom"

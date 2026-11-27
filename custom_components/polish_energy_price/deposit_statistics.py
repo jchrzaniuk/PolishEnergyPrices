@@ -24,6 +24,7 @@ from .const import (
     CONF_CUSTOM_PRICES,
     CONF_DEPOSIT_BALANCE,
     CONF_DEPOSIT_MONTH,
+    CONF_DEPOSIT_TRANCHES,
     CONF_EXPORT_SETTLEMENT,
     CONF_EXPORT_STATISTIC,
     CONF_EXPORT_STATISTICS,
@@ -42,7 +43,9 @@ from .deposit import (
     inflow,
     month_range,
     monthly_inflows,
+    opening_from_invoice,
     opening_tranches,
+    parse_tranches,
     simulate,
 )
 from .export_price import (
@@ -100,8 +103,13 @@ class DepositStatisticsManager:
                 settings.get(external_statistic_key(zone))
                 for zone in self.tariff.zones
             )
-            or settings.get(CONF_DEPOSIT_BALANCE) is None
-            or not settings.get(CONF_DEPOSIT_MONTH)
+            or not (
+                str(settings.get(CONF_DEPOSIT_TRANCHES) or "").strip()
+                or (
+                    settings.get(CONF_DEPOSIT_BALANCE) is not None
+                    and settings.get(CONF_DEPOSIT_MONTH)
+                )
+            )
         )
 
     async def async_refresh(self, _now: datetime | None = None) -> None:
@@ -203,7 +211,10 @@ class DepositStatisticsManager:
 
     async def _async_refresh(self) -> dict[str, Any]:
         settings = self._settings()
-        balance_month = str(settings[CONF_DEPOSIT_MONTH])[:7]
+        invoice = parse_tranches(str(settings.get(CONF_DEPOSIT_TRANCHES) or ""))
+        balance_month = (
+            max(invoice) if invoice else str(settings[CONF_DEPOSIT_MONTH])[:7]
+        )
         current = rcem_month_key(datetime.now(WARSAW).date())
         last = add_months(current, -1)
         if balance_month > last:
@@ -211,8 +222,9 @@ class DepositStatisticsManager:
                 f"Miesiąc salda ({balance_month}) jeszcze się nie zakończył"
             )
 
-        # Tranche balance_month-12 is used up by the balance month itself.
-        first = add_months(balance_month, -11)
+        # The balance includes the tranche of balance_month, so 12 months
+        # (balance_month-11..balance_month) are needed.
+        first = min([add_months(balance_month, -11), *invoice])
         prices = await self._rcem_prices(first, last)
         mapped = {
             zone: str(settings[external_statistic_key(zone)])
@@ -249,10 +261,18 @@ class DepositStatisticsManager:
             if month <= last and (month in prices or month != last)
         }
         inflows = monthly_inflows(in_range, prices)
-        opening = opening_tranches(
-            float(settings[CONF_DEPOSIT_BALANCE]), balance_month, inflows
-        )
-        tranches = simulate(opening, inflows, costs, balance_month, last)
+        if invoice:
+            opening = opening_from_invoice(invoice, inflows)
+        else:
+            opening = opening_tranches(
+                float(settings[CONF_DEPOSIT_BALANCE]), balance_month, inflows
+            )
+        if balance_month == last:
+            tranches = [t for t in opening if t.remaining > 1e-9]
+        else:
+            tranches = simulate(
+                opening, inflows, costs, add_months(balance_month, 1), last
+            )
 
         # The current month has no RCEm yet; its inflow uses the latest known.
         inflow_so_far = (
@@ -265,4 +285,7 @@ class DepositStatisticsManager:
             "cost": costs.get(current, 0.0),
             "inflow": inflow_so_far,
             "month": current,
+            "source": "invoice" if invoice else "balance",
+            "start_month": balance_month,
+            "start_balance": sum(t.remaining for t in opening),
         }

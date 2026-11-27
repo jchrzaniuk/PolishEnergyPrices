@@ -90,11 +90,15 @@
       },
       "export_statistic": {
         "title": "Grid-export energy statistic",
-        "description": "Choose the cumulative statistic of energy EXPORTED to the grid (not consumed). The integration builds a cumulative PLN compensation statistic from it for RCEm settlement. Optionally enter the deposit balance from your invoice and any day of the month at the end of which it applies — the integration then creates the Estimated deposit balance sensor. It needs consumption statistics mapped to tariff zones.",
+        "description": "Choose the cumulative statistic of energy EXPORTED to the grid (not consumed). The integration builds a cumulative PLN compensation statistic from it for RCEm settlement. Optionally copy the deposit tranches from your invoice, or enter the balance and the last energy month it includes — the integration then creates the Estimated deposit balance sensor. It needs consumption statistics mapped to tariff zones.",
         "data": {
           "export_statistic": "Grid-export energy statistic",
           "deposit_balance": "Deposit balance from the invoice [PLN] (optional)",
-          "deposit_month": "Deposit balance month (optional)"
+          "deposit_month": "Last energy month included in the balance (optional)",
+          "deposit_tranches": "Deposit tranches from the invoice (optional)"
+        },
+        "data_description": {
+          "deposit_tranches": "One line per tranche: a date in the energy month and the amount remaining to be settled, e.g. 2025-07-31 120.24. A whole row pasted from the invoice table works too — the first date and the last amount count. When filled in, the balance and month are ignored."
         }
       }
     },
@@ -104,7 +108,8 @@
       "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia.",
       "invalid_export_correction": "The correction factor must be a number between 0.5 and 2.0.",
       "export_statistics_requires_rcem": "The compensation statistic can only be enabled for RCEm settlement.",
-      "export_statistic_duplicate": "The selected statistic is already assigned to one of the consumption zones."
+      "export_statistic_duplicate": "The selected statistic is already assigned to one of the consumption zones.",
+      "invalid_deposit_tranches": "Invalid deposit tranches. Use lines like 2025-07-31 120.24 (no repeated months, the newest month must be finished)."
     }
   },
   "options": {
@@ -179,11 +184,15 @@
       },
       "export_statistic": {
         "title": "Grid-export energy statistic",
-        "description": "Choose the cumulative statistic of energy EXPORTED to the grid (not consumed). The integration builds a cumulative PLN compensation statistic from it for RCEm settlement. Optionally enter the deposit balance from your invoice and any day of the month at the end of which it applies — the integration then creates the Estimated deposit balance sensor. It needs consumption statistics mapped to tariff zones.",
+        "description": "Choose the cumulative statistic of energy EXPORTED to the grid (not consumed). The integration builds a cumulative PLN compensation statistic from it for RCEm settlement. Optionally copy the deposit tranches from your invoice, or enter the balance and the last energy month it includes — the integration then creates the Estimated deposit balance sensor. It needs consumption statistics mapped to tariff zones.",
         "data": {
           "export_statistic": "Grid-export energy statistic",
           "deposit_balance": "Deposit balance from the invoice [PLN] (optional)",
-          "deposit_month": "Deposit balance month (optional)"
+          "deposit_month": "Last energy month included in the balance (optional)",
+          "deposit_tranches": "Deposit tranches from the invoice (optional)"
+        },
+        "data_description": {
+          "deposit_tranches": "One line per tranche: a date in the energy month and the amount remaining to be settled, e.g. 2025-07-31 120.24. A whole row pasted from the invoice table works too — the first date and the last amount count. When filled in, the balance and month are ignored."
         }
       }
     },
@@ -193,7 +202,8 @@
       "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia.",
       "invalid_export_correction": "The correction factor must be a number between 0.5 and 2.0.",
       "export_statistics_requires_rcem": "The compensation statistic can only be enabled for RCEm settlement.",
-      "export_statistic_duplicate": "The selected statistic is already assigned to one of the consumption zones."
+      "export_statistic_duplicate": "The selected statistic is already assigned to one of the consumption zones.",
+      "invalid_deposit_tranches": "Invalid deposit tranches. Use lines like 2025-07-31 120.24 (no repeated months, the newest month must be finished)."
     }
   },
   "selector": {

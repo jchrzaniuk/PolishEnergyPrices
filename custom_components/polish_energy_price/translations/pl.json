@@ -90,11 +90,15 @@
       },
       "export_statistic": {
         "title": "Statystyka energii oddanej do sieci",
-        "description": "Wybierz narastającą statystykę energii ODDANEJ do sieci (nie pobranej). Integracja utworzy na jej podstawie narastającą statystykę zwrotu w PLN dla rozliczenia RCEm. Opcjonalnie podaj saldo depozytu z faktury i dowolny dzień miesiąca, na koniec którego to saldo obowiązuje — integracja utworzy czujnik Szacowany stan depozytu. Wymaga statystyk poboru przypisanych do stref.",
+        "description": "Wybierz narastającą statystykę energii ODDANEJ do sieci (nie pobranej). Integracja utworzy na jej podstawie narastającą statystykę zwrotu w PLN dla rozliczenia RCEm. Opcjonalnie przepisz z faktury transze depozytu albo podaj saldo i ostatni miesiąc energii w nim ujęty — integracja utworzy czujnik Szacowany stan depozytu. Wymaga statystyk poboru przypisanych do stref.",
         "data": {
           "export_statistic": "Statystyka energii oddanej do sieci",
           "deposit_balance": "Saldo depozytu z faktury [PLN] (opcjonalnie)",
-          "deposit_month": "Miesiąc salda depozytu (opcjonalnie)"
+          "deposit_month": "Ostatni miesiąc energii ujęty w saldzie (opcjonalnie)",
+          "deposit_tranches": "Transze depozytu z faktury (opcjonalnie)"
+        },
+        "data_description": {
+          "deposit_tranches": "Jeden wiersz na transzę: data miesiąca energii i wartość pozostała do rozliczenia, np. 2025-07-31 120,24. Można wkleić cały wiersz tabeli z faktury — liczy się pierwsza data i ostatnia kwota. Gdy wypełnione, saldo i miesiąc są pomijane."
         }
       }
     },
@@ -104,7 +108,8 @@
       "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia.",
       "invalid_export_correction": "Współczynnik korygujący musi być liczbą z zakresu 0,5–2,0.",
       "export_statistics_requires_rcem": "Statystykę zwrotu można włączyć tylko przy rozliczeniu RCEm.",
-      "export_statistic_duplicate": "Wybrana statystyka jest już przypisana do jednej ze stref poboru."
+      "export_statistic_duplicate": "Wybrana statystyka jest już przypisana do jednej ze stref poboru.",
+      "invalid_deposit_tranches": "Nieprawidłowe transze depozytu. Użyj wierszy w formacie 2025-07-31 120,24 (bez powtórzeń miesięcy, najnowszy miesiąc musi być zakończony)."
     }
   },
   "options": {
@@ -179,11 +184,15 @@
       },
       "export_statistic": {
         "title": "Statystyka energii oddanej do sieci",
-        "description": "Wybierz narastającą statystykę energii ODDANEJ do sieci (nie pobranej). Integracja utworzy na jej podstawie narastającą statystykę zwrotu w PLN dla rozliczenia RCEm. Opcjonalnie podaj saldo depozytu z faktury i dowolny dzień miesiąca, na koniec którego to saldo obowiązuje — integracja utworzy czujnik Szacowany stan depozytu. Wymaga statystyk poboru przypisanych do stref.",
+        "description": "Wybierz narastającą statystykę energii ODDANEJ do sieci (nie pobranej). Integracja utworzy na jej podstawie narastającą statystykę zwrotu w PLN dla rozliczenia RCEm. Opcjonalnie przepisz z faktury transze depozytu albo podaj saldo i ostatni miesiąc energii w nim ujęty — integracja utworzy czujnik Szacowany stan depozytu. Wymaga statystyk poboru przypisanych do stref.",
         "data": {
           "export_statistic": "Statystyka energii oddanej do sieci",
           "deposit_balance": "Saldo depozytu z faktury [PLN] (opcjonalnie)",
-          "deposit_month": "Miesiąc salda depozytu (opcjonalnie)"
+          "deposit_month": "Ostatni miesiąc energii ujęty w saldzie (opcjonalnie)",
+          "deposit_tranches": "Transze depozytu z faktury (opcjonalnie)"
+        },
+        "data_description": {
+          "deposit_tranches": "Jeden wiersz na transzę: data miesiąca energii i wartość pozostała do rozliczenia, np. 2025-07-31 120,24. Można wkleić cały wiersz tabeli z faktury — liczy się pierwsza data i ostatnia kwota. Gdy wypełnione, saldo i miesiąc są pomijane."
         }
       }
     },
@@ -193,7 +202,8 @@
       "no_energy_statistics": "Home Assistant nie udostępnia żadnej narastającej statystyki energii. Najpierw skonfiguruj lub zaimportuj licznik zużycia.",
       "invalid_export_correction": "Współczynnik korygujący musi być liczbą z zakresu 0,5–2,0.",
       "export_statistics_requires_rcem": "Statystykę zwrotu można włączyć tylko przy rozliczeniu RCEm.",
-      "export_statistic_duplicate": "Wybrana statystyka jest już przypisana do jednej ze stref poboru."
+      "export_statistic_duplicate": "Wybrana statystyka jest już przypisana do jednej ze stref poboru.",
+      "invalid_deposit_tranches": "Nieprawidłowe transze depozytu. Użyj wierszy w formacie 2025-07-31 120,24 (bez powtórzeń miesięcy, najnowszy miesiąc musi być zakończony)."
     }
   },
   "selector": {

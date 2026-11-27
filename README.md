@@ -620,17 +620,25 @@ minęło 12 miesięcy.
 2. Przypisz statystyki poboru do wszystkich stref taryfy (zob.
    [Liczniki udostępniające tylko statystyki zewnętrzne](#liczniki-udostępniające-tylko-statystyki-zewnętrzne)).
 3. W **Opcjach** przejdź do kroku **Statystyka energii oddanej do sieci** i
-   wypełnij dwa pola:
-   - **Saldo depozytu z faktury** – kwota środków w depozycie z faktury, w PLN,
-   - **Miesiąc salda depozytu** – dowolny dzień miesiąca, na koniec którego to saldo
-     obowiązuje (np. 31.12.2025 albo 1.12.2025 dla salda na koniec grudnia).
+   podaj początkowy stan depozytu jednym z dwóch sposobów:
+   - **zalecany: Transze depozytu z faktury** – wklej tabelę z faktury, kolumnę
+     **Wartość pozostała do rozliczenia**, po jednym wierszu na transzę: data
+     (ostatni dzień miesiąca oddania energii) i kwota, np. `2025-07-31 120,24`.
+     Można też wkleić całe wiersze tabeli: liczy się pierwsza data i ostatnia
+     kwota w wierszu. Liczy się miesiąc oddania energii. Jeśli sprzedawca podaje
+     datę przypisania z następnego miesiąca (np. 1.03 dla energii z lutego),
+     wpisz datę z miesiąca energii. Najnowszy miesiąc musi być zakończony.
+     Saldo i miesiąc są wtedy pomijane;
+   - zapasowy: **Saldo depozytu z faktury** (kwota w PLN) i **Ostatni miesiąc
+     energii ujęty w saldzie** – dowolny dzień tego miesiąca (np. 28.02.2026).
+     Saldo obejmuje transzę za ten miesiąc.
 4. Zapisz. Wpis przeładuje się, a czujnik pojawi się na urządzeniu wpisu.
 
 Czujnik nie powstaje dla taryf G13s i G14dynamic ani wtedy, gdy brakuje
 któregoś z powyższych ustawień. Jeśli nie da się go policzyć (np. saldo jest
-większe niż wszystko, co mogło wpłynąć w ostatnich 11 miesiącach, albo brakuje
+większe niż wszystko, co mogło wpłynąć w ostatnich 12 miesiącach, albo brakuje
 RCEm za miesiąc z eksportem), w **Ustawienia → Naprawy** pojawi się komunikat
-z przyczyną. Aby wyłączyć czujnik, wyczyść pole salda.
+z przyczyną. Aby wyłączyć czujnik, wyczyść pola transz oraz salda.
 
 #### Co pokazuje czujnik
 
@@ -641,7 +649,8 @@ z przyczyną. Aby wyłączyć czujnik, wyczyść pole salda.
   jeśli do tego czasu nic z niej nie zejdzie.
 - **Bieżący miesiąc** – koszt i wpływ od początku miesiąca. Nie zmieniają
   stanu, dopóki miesiąc się nie skończy.
-- **Saldo startowe** i **Miesiąc salda startowego** – to, co wpisano w opcjach.
+- **Saldo startowe**, **Miesiąc salda startowego** i **Źródło salda
+  startowego** – od czego zaczęto liczyć (transze z faktury albo saldo).
 
 Czujnik nie ma historii długoterminowej (nie jest statystyką), więc nie
 podpina się go do panelu Energia.
@@ -650,7 +659,7 @@ podpina się go do panelu Energia.
 
 | Wielkość | Źródło |
 |---|---|
-| Saldo startowe | Pole **Saldo depozytu z faktury** w opcjach |
+| Saldo startowe | Pole **Transze depozytu z faktury** albo **Saldo depozytu z faktury** w opcjach |
 | Energia oddana w miesiącu | Miesięczna zmiana statystyki energii oddanej |
 | Energia pobrana w miesiącu | Miesięczna zmiana statystyk poboru przypisanych do stref |
 | Cena energii pobranej | Cena energii czynnej brutto strefy z wpisu (z akcyzą i VAT, bez dystrybucji i opłat stałych) |
@@ -679,10 +688,11 @@ podpina się go do panelu Energia.
    włącznie (art. 4c ust. 5). Potem znika z salda. Zwrot za nią to mniejsza
    z kwot: reszta transzy albo 20% × energia(M) × RCEm(M), bez współczynnika
    1,23 (art. 4 ust. 11a pkt 1). Nadwyżka przepada (art. 4c ust. 6).
-5. **Saldo z faktury** to stan po rozliczeniu kosztu miesiąca salda, jeszcze
-   bez transzy za ten miesiąc. Integracja rozkłada je na transze z 11
-   poprzednich miesięcy, od najnowszej wstecz, aż suma zrówna się z saldem.
-   Tak ustala, kiedy wygasną środki, których faktura nie rozpisuje.
+5. **Saldo z faktury** to stan po rozliczeniu kosztu ostatniego miesiąca,
+   razem z transzą za ten miesiąc. Integracja rozkłada je na transze z 12
+   miesięcy (D-11..D), od najnowszej wstecz, aż suma zrówna się z saldem.
+   Tak ustala, kiedy wygasną środki, których faktura nie rozpisuje. Przy
+   transzach z faktury rozpisania nie ma, bo faktura podaje je wprost.
 
 #### Co na co wpływa
 
@@ -709,6 +719,8 @@ podpina się go do panelu Energia.
   a nie skorygowaną.
 - Zwrot za wygasłe środki jest tylko szacunkiem w atrybutach i nie zmienia
   salda.
+- Sprzedawca liczy z RCEm aktualną w dniu faktury, więc późniejsza korekta PSE
+  zmienia wynik integracji, i z kWh zaokrąglonych do całości.
 
 ### Usługa Docker: HTTP i MQTT
 

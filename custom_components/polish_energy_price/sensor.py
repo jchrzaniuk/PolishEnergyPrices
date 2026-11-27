@@ -22,8 +22,6 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_CUSTOM_PRICES,
     CONF_DAY_HOURS,
-    CONF_DEPOSIT_BALANCE,
-    CONF_DEPOSIT_MONTH,
     CONF_EXPORT_CORRECTION,
     CONF_EXPORT_SETTLEMENT,
     CONF_METER_CLOCK,
@@ -619,6 +617,7 @@ class PolishEnergyDepositSensor(
             "Bieżący miesiąc",
             "Saldo startowe [PLN]",
             "Miesiąc salda startowego",
+            "Źródło salda startowego",
         }
     )
     _attr_has_entity_name = True
@@ -663,7 +662,6 @@ class PolishEnergyDepositSensor(
         if result is None:
             return {}
         tranches = result["tranches"]
-        settings = {**self._entry.data, **self._entry.options}
         nearest = tranches[0] if tranches else None
         return {
             "Transze": [
@@ -690,6 +688,11 @@ class PolishEnergyDepositSensor(
                     None if result["inflow"] is None else round(result["inflow"], 2)
                 ),
             },
-            "Saldo startowe [PLN]": settings[CONF_DEPOSIT_BALANCE],
-            "Miesiąc salda startowego": str(settings[CONF_DEPOSIT_MONTH])[:7],
+            "Saldo startowe [PLN]": round(result["start_balance"], 2),
+            "Miesiąc salda startowego": result["start_month"],
+            "Źródło salda startowego": (
+                "transze z faktury"
+                if result["source"] == "invoice"
+                else "saldo z faktury"
+            ),
         }
