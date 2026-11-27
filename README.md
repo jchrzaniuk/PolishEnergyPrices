@@ -635,11 +635,17 @@ podpina się go do panelu Energia.
 
 1. **Wpływ.** Energia oddana w miesiącu M × RCEm(M) × współczynnik trafia do
    depozytu jako osobna transza na początku miesiąca M+1 (art. 4c ust. 4
-   ustawy o OZE, tekst jedn. Dz.U. 2026 poz. 68; współczynnik od 1.02.2025:
-   art. 31 ustawy Dz.U. 2024 poz. 1847).
+   ustawy o OZE, tekst jedn. Dz.U. 2026 poz. 68). RCEm jest ceną netto,
+   a koszt energii liczy się brutto, więc ustawa podnosi wpływ o 1,23, żeby
+   obie strony były porównywalne. Współczynnik dopisała nowelizacja Dz.U. 2024
+   poz. 1847 i według jej art. 31 obowiązuje od 1.02.2025. Energia oddana
+   wcześniej liczy się po samej RCEm (1,0). Integracja przyjmuje, że chodzi
+   o energię oddaną od lutego 2025, tak jak rozliczają to sprzedawcy.
 2. **Koszt.** Za każdy miesiąc: energia pobrana w strefie × cena energii
-   czynnej brutto tej strefy, zsumowane po strefach. Depozyt nie pokrywa
-   dystrybucji ani opłat stałych (art. 4c ust. 2-3).
+   czynnej brutto tej strefy, zsumowane po strefach. Brutto, bo art. 4c ust. 3
+   każe użyć ceny „uwzględniającej obowiązkowe obciążenia podatkowe
+   i fiskalne”, czyli z VAT i akcyzą. Depozyt nie pokrywa dystrybucji ani
+   opłat stałych (art. 4c ust. 2).
 3. **Rozliczenie.** Koszt schodzi najpierw z najstarszej transzy (FIFO, art. 4c
    ust. 7). Gdy saldo się skończy, resztę płacisz Ty i nie przechodzi ona na
    kolejne miesiące.
