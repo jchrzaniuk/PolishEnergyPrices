@@ -574,73 +574,111 @@ Pozostałe zasady:
 
 ### Szacowany stan depozytu
 
-Czujnik **Szacowany stan depozytu** (PLN) szacuje saldo depozytu prosumenckiego
-z uwzględnieniem wygasania środków. Z faktury znasz saldo na koniec jednego
-miesiąca (np. 31.12.2025); integracja liczy je dalej, miesiąc po miesiącu.
+Czujnik **Szacowany stan depozytu** (PLN) pokazuje, ile pieniędzy zostało
+w depozycie prosumenckim i kiedy wygasną kolejne kwoty. Punktem wyjścia jest
+saldo z faktury. Od tego miesiąca integracja liczy dalej sama: dopisuje
+wartość energii oddanej, odejmuje koszt energii pobranej i usuwa środki, którym
+minęło 12 miesięcy.
 
-#### Skąd dane
+> **To jest szacunek, nie stan konta u sprzedawcy.** Wiążące jest saldo
+> z faktury albo z eBOK. Czujnik może się od niego różnić o kilka, a przy
+> dużym eksporcie o kilkadziesiąt złotych. Powody opisuje
+> [Skąd biorą się różnice](#skąd-biorą-się-różnice). Po każdej fakturze
+> wpisz nowe saldo, a błąd zacznie się liczyć od zera.
 
-- saldo z faktury i miesiąc, na koniec którego obowiązuje — podajesz je w
-  kroku **Statystyka energii oddanej do sieci** (oba pola są opcjonalne;
-  wystarczy dowolny dzień tego miesiąca),
-- energia oddana: miesięczne sumy ze statystyki energii oddanej,
-- koszt energii: miesięczne sumy statystyk poboru przypisanych do stref taryfy,
-  pomnożone przez cenę energii czynnej brutto danej strefy (z akcyzą, z VAT;
-  bez dystrybucji i opłat stałych),
-- RCEm: ceny z koordynatora (14 ostatnich miesięcy). Starsze integracja
-  pobiera z archiwum na stronie PSE, zapisuje w pamięci wpisu i nie pobiera
-  ponownie.
+#### Włączenie
 
-#### Reguły z ustawy o OZE (tekst jedn. Dz.U. 2026 poz. 68)
+1. Skonfiguruj rozliczenie **RCEm** i
+   [statystykę zwrotu](#statystyka-zwrotu-dla-rcem) ze statystyką energii
+   oddanej.
+2. Przypisz statystyki poboru do wszystkich stref taryfy (zob.
+   [Liczniki udostępniające tylko statystyki zewnętrzne](#liczniki-udostępniające-tylko-statystyki-zewnętrzne)).
+3. W **Opcjach** przejdź do kroku **Statystyka energii oddanej do sieci** i
+   wypełnij dwa pola:
+   - **Saldo depozytu z faktury** – kwota środków w depozycie z faktury, w PLN,
+   - **Miesiąc salda depozytu** – dowolny dzień miesiąca, na koniec którego to saldo
+     obowiązuje (np. 31.12.2025 albo 1.12.2025 dla salda na koniec grudnia).
+4. Zapisz. Wpis przeładuje się, a czujnik pojawi się na urządzeniu wpisu.
 
-1. Wpływ za miesiąc energii M = energia oddana w M × RCEm(M) × współczynnik:
-   1,23 dla M od 2025-02, 1,0 dla wcześniejszych (art. 4c ust. 4 oraz art. 31
-   ustawy Dz.U. 2024 poz. 1847). Czujnik używa tego ustawowego współczynnika,
-   a nie pola **Współczynnik korygujący depozytu**.
-2. Wpływ z M trafia na konto w miesiącu M+1 (art. 4c ust. 4).
-3. Depozyt pokrywa tylko koszt energii czynnej brutto, bez dystrybucji i opłat
-   stałych (art. 4c ust. 2-3).
-4. Najpierw rozlicza się najstarsze środki, czyli FIFO (art. 4c ust. 7).
-5. Środki z M można rozliczać przez 12 miesięcy od przypisania (art. 4c ust. 5);
-   ostatni koszt, który może pokryć transzę M, to koszt miesiąca M+12. Potem
-   reszta wygasa. Zwrot to mniej z dwóch kwot: reszty i 20% × energia(M) ×
-   RCEm(M), bez współczynnika 1,23 (art. 4 ust. 11a pkt 1); nadwyżka przepada
-   (art. 4c ust. 6).
+Czujnik nie powstaje dla taryf G13s i G14dynamic ani wtedy, gdy brakuje
+któregoś z powyższych ustawień. Jeśli nie da się go policzyć (np. saldo jest
+większe niż wszystko, co mogło wpłynąć w ostatnich 11 miesiącach, albo brakuje
+RCEm za miesiąc z eksportem), w **Ustawienia → Naprawy** pojawi się komunikat
+z przyczyną. Aby wyłączyć czujnik, wyczyść pole salda.
 
-#### Przyjęte uproszczenia
+#### Co pokazuje czujnik
 
-- Krok miesięczny. Na koniec miesiąca C: koszt C pokrywają transze przypisane
-  do końca C (energia z miesięcy do C-1), nadwyżka kosztu ponad saldo nie jest
-  przenoszona (płaci ją klient); potem przypisywana jest transza za C; na końcu
-  wygasają transze, których miesiąc M+12 minął.
-- Saldo z faktury to stan po rozliczeniu kosztu miesiąca salda, bez transzy za
-  ten miesiąc. Rozpisanie na transze bierze energię z 11 miesięcy przed
-  miesiącem salda, od najnowszej wstecz, aż suma zrówna się z saldem (transza
-  graniczna częściowo). Transza sprzed 12 miesięcy wygasła już wtedy. Jeśli
-  saldo jest większe niż wpływy z tych miesięcy, pojawia się naprawa i czujnik
-  nie jest liczony.
-- Stan czujnika to saldo po ostatnim zakończonym miesiącu. Bieżący miesiąc
-  (koszt i wpływ dotychczas) jest tylko w atrybutach; jego wpływ liczony jest
-  wg ostatniej znanej RCEm. Transza za ostatni zakończony miesiąc pojawia się
-  dopiero po publikacji jego RCEm (ok. 11. dnia).
-- Koszt liczony jest według aktualnych cen energii wpisu, także dla miesięcy
-  sprzed ich zmiany.
+- **Stan** – saldo po ostatnim zakończonym miesiącu.
+- **Transze** – środki pogrupowane według miesiąca, w którym oddano energię:
+  ile zostało i po rozliczeniu którego miesiąca wygasną.
+- **Najbliższe wygaśnięcie** – najstarsza transza, jej kwota i szacowany zwrot,
+  jeśli do tego czasu nic z niej nie zejdzie.
+- **Bieżący miesiąc** – koszt i wpływ od początku miesiąca. Nie zmieniają
+  stanu, dopóki miesiąc się nie skończy.
+- **Saldo startowe** i **Miesiąc salda startowego** – to, co wpisano w opcjach.
+
+Czujnik nie ma historii długoterminowej (nie jest statystyką), więc nie
+podpina się go do panelu Energia.
+
+#### Skąd biorą się dane
+
+| Wielkość | Źródło |
+|---|---|
+| Saldo startowe | Pole **Saldo depozytu z faktury** w opcjach |
+| Energia oddana w miesiącu | Miesięczna zmiana statystyki energii oddanej |
+| Energia pobrana w miesiącu | Miesięczna zmiana statystyk poboru przypisanych do stref |
+| Cena energii pobranej | Cena energii czynnej brutto strefy z wpisu (z akcyzą i VAT, bez dystrybucji i opłat stałych) |
+| RCEm | 14 ostatnich miesięcy z koordynatora; starsze z archiwum na stronie PSE, zapamiętywane we wpisie |
+| Współczynnik | 1,23 dla energii od lutego 2025, 1,0 wcześniej (z ustawy, nie z pola **Współczynnik korygujący depozytu**) |
+
+#### Jak to się liczy
+
+1. **Wpływ.** Energia oddana w miesiącu M × RCEm(M) × współczynnik trafia do
+   depozytu jako osobna transza na początku miesiąca M+1 (art. 4c ust. 4
+   ustawy o OZE, tekst jedn. Dz.U. 2026 poz. 68; współczynnik od 1.02.2025:
+   art. 31 ustawy Dz.U. 2024 poz. 1847).
+2. **Koszt.** Za każdy miesiąc: energia pobrana w strefie × cena energii
+   czynnej brutto tej strefy, zsumowane po strefach. Depozyt nie pokrywa
+   dystrybucji ani opłat stałych (art. 4c ust. 2-3).
+3. **Rozliczenie.** Koszt schodzi najpierw z najstarszej transzy (FIFO, art. 4c
+   ust. 7). Gdy saldo się skończy, resztę płacisz Ty i nie przechodzi ona na
+   kolejne miesiące.
+4. **Wygaśnięcie.** Transza z miesiąca M może pokrywać koszty do miesiąca M+12
+   włącznie (art. 4c ust. 5). Potem znika z salda. Zwrot za nią to mniejsza
+   z kwot: reszta transzy albo 20% × energia(M) × RCEm(M), bez współczynnika
+   1,23 (art. 4 ust. 11a pkt 1). Nadwyżka przepada (art. 4c ust. 6).
+5. **Saldo z faktury** to stan po rozliczeniu kosztu miesiąca salda, jeszcze
+   bez transzy za ten miesiąc. Integracja rozkłada je na transze z 11
+   poprzednich miesięcy, od najnowszej wstecz, aż suma zrówna się z saldem.
+   Tak ustala, kiedy wygasną środki, których faktura nie rozpisuje.
+
+#### Co na co wpływa
+
+- Więcej energii oddanej w miesiącu M → większa transza za M, widoczna
+  dopiero po publikacji RCEm za M (ok. 11. dnia miesiąca M+1).
+- Korekta RCEm przez PSE → zmiana transzy za ten miesiąc przy następnym
+  odświeżeniu (co godzinę).
+- Większy pobór → szybciej schodzą najstarsze transze, więc mniej środków
+  wygasa i mniejszy jest zwrot.
+- Zmiana cen energii we wpisie → przeliczenie kosztów wszystkich miesięcy po
+  saldzie startowym (patrz niżej).
+- Nowe saldo z faktury → wszystko liczone od nowa od tego miesiąca.
+
+#### Skąd biorą się różnice
+
+- Koszt liczony jest według bieżących cen wpisu, także dla miesięcy sprzed
+  ich zmiany.
+- Integracja zakłada, że statystyki poboru i oddania są już po bilansowaniu
+  godzinowym (art. 4 ust. 2b), czyli tak jak w danych operatora. Jeśli
+  pochodzą z własnego pomiaru (falownik, licznik w rozdzielnicy), to w
+  godzinach z poborem i oddaniem jednocześnie zawyżone będą i wpływ, i koszt.
+- Krok jest miesięczny, a saldo z faktury traktowane jest jako stan na koniec
+  wybranego miesiąca. Okres rozliczeniowy kończący się w środku miesiąca
+  przesuwa wynik.
+- Sprzedawca księguje faktury z opóźnieniem i może rozliczać RCEm wstępną,
+  a nie skorygowaną.
 - Zwrot za wygasłe środki jest tylko szacunkiem w atrybutach i nie zmienia
   salda.
-- Zakładamy, że statystyki poboru i oddania są już po bilansowaniu godzinowym
-  (art. 4 ust. 2b); integracja go nie liczy.
-
-#### Wymagania
-
-Rozliczenie RCEm, statystyka zwrotu, statystyki poboru przypisane do wszystkich
-stref taryfy (most kosztów), taryfa inna niż G13s i G14dynamic oraz saldo
-z miesiącem. Bez któregoś z nich czujnik nie powstaje.
-
-#### To szacunek
-
-Wynik różni się od eBOK między fakturami: różnice w cenach, w
-bilansowaniu godzinowym i w momencie księgowania. Po każdej nowej fakturze
-podaj nowe saldo i miesiąc w opcjach.
 
 ### Usługa Docker: HTTP i MQTT
 
