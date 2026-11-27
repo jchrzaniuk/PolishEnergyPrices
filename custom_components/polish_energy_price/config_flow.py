@@ -18,6 +18,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.selector import (
     BooleanSelector,
+    DateSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -32,6 +33,8 @@ from homeassistant.util.unit_conversion import EnergyConverter
 from .const import (
     CONF_CUSTOM_PRICES,
     CONF_DAY_HOURS,
+    CONF_DEPOSIT_BALANCE,
+    CONF_DEPOSIT_MONTH,
     CONF_EXPORT_CORRECTION,
     CONF_EXPORT_SETTLEMENT,
     CONF_EXPORT_STATISTIC,
@@ -269,15 +272,49 @@ def _source_schema(
 def _export_statistic_schema(
     statistic_options: list[SelectOptionDict],
     default: str | None = None,
+    suggested: Mapping[str, Any] | None = None,
 ) -> vol.Schema:
-    """Select one cumulative energy-exported statistic for RCEm compensation."""
+    """Select one cumulative energy-exported statistic for RCEm compensation.
+
+    The two optional fields give the invoice deposit balance and its month
+    for the estimated deposit sensor.
+    """
 
     marker = (
         vol.Required(CONF_EXPORT_STATISTIC, default=default)
         if default
         else vol.Required(CONF_EXPORT_STATISTIC)
     )
-    return vol.Schema({marker: _select(statistic_options)})
+    suggested = suggested or {}
+    return vol.Schema(
+        {
+            marker: _select(statistic_options),
+            vol.Optional(
+                CONF_DEPOSIT_BALANCE,
+                description={"suggested_value": suggested.get(CONF_DEPOSIT_BALANCE)},
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0,
+                    step="any",
+                    mode=NumberSelectorMode.BOX,
+                    unit_of_measurement="PLN",
+                )
+            ),
+            vol.Optional(
+                CONF_DEPOSIT_MONTH,
+                description={"suggested_value": suggested.get(CONF_DEPOSIT_MONTH)},
+            ): DateSelector(),
+        }
+    )
+
+
+def _deposit_fields(user_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Optional fields left empty are stored as None, which also clears old values."""
+
+    return {
+        key: user_input.get(key)
+        for key in (CONF_DEPOSIT_BALANCE, CONF_DEPOSIT_MONTH)
+    }
 
 
 def _mapped_consumption_statistics(data: dict[str, Any]) -> set[str]:
@@ -651,6 +688,7 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "export_statistic_duplicate"
             else:
                 self._data[CONF_EXPORT_STATISTIC] = selected
+                self._data.update(_deposit_fields(user_input))
                 return self._finish()
         statistic_options = await _energy_statistic_options(self.hass)
         defaults = await _energy_statistic_defaults(self.hass, statistic_options)
@@ -662,7 +700,7 @@ class PolishEnergyPriceConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="export_statistic",
             data_schema=_export_statistic_schema(
-                statistic_options, defaults.get(CONF_EXPORT_STATISTIC)
+                statistic_options, defaults.get(CONF_EXPORT_STATISTIC), defaults
             ),
             errors=errors,
         )
@@ -890,6 +928,7 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
                 errors["base"] = "export_statistic_duplicate"
             else:
                 self._options[CONF_EXPORT_STATISTIC] = selected
+                self._options.update(_deposit_fields(user_input))
                 return self.async_create_entry(data=self._options)
         statistic_options = await _energy_statistic_options(self.hass)
         defaults = await _energy_statistic_defaults(self.hass, statistic_options)
@@ -901,7 +940,7 @@ class PolishEnergyPriceOptionsFlow(OptionsFlowWithReload):
         return self.async_show_form(
             step_id="export_statistic",
             data_schema=_export_statistic_schema(
-                statistic_options, defaults.get(CONF_EXPORT_STATISTIC)
+                statistic_options, defaults.get(CONF_EXPORT_STATISTIC), defaults
             ),
             errors=errors,
         )

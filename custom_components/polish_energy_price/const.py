@@ -19,6 +19,8 @@ CONF_EXPORT_SETTLEMENT = "export_settlement"
 CONF_EXPORT_CORRECTION = "export_correction"
 CONF_EXPORT_STATISTICS = "export_statistics"
 CONF_EXPORT_STATISTIC = "export_statistic"
+CONF_DEPOSIT_BALANCE = "deposit_balance"
+CONF_DEPOSIT_MONTH = "deposit_month"
 
 PRICE_SOURCE_REGULATED = "regulated"
 PRICE_SOURCE_CUSTOM = "custom"

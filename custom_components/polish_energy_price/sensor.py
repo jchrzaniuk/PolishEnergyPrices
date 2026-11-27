@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -18,6 +22,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_CUSTOM_PRICES,
     CONF_DAY_HOURS,
+    CONF_DEPOSIT_BALANCE,
+    CONF_DEPOSIT_MONTH,
     CONF_EXPORT_CORRECTION,
     CONF_EXPORT_SETTLEMENT,
     CONF_METER_CLOCK,
@@ -32,6 +38,7 @@ from .const import (
     PRICE_SOURCE_CUSTOM,
 )
 from .coordinator import EnergyPriceCoordinator
+from .deposit import expires_after, expiry_refund
 from .export_price import ExportPrice, export_price_at, upcoming_export_periods
 from .forecast import (
     UNRECORDED_FORECAST_ATTRIBUTES,
@@ -86,6 +93,11 @@ async def async_setup_entry(
             PolishEnergyExportPriceSensor(
                 entry, entry.runtime_data.coordinator, sensor
             )
+        )
+    deposit = entry.runtime_data.deposit_statistics
+    if deposit is not None and deposit.enabled:
+        entities.append(
+            PolishEnergyDepositSensor(entry, entry.runtime_data.coordinator, sensor)
         )
     async_add_entities(entities)
 
@@ -593,3 +605,91 @@ class PolishEnergyExportPriceSensor(
                 data.export_prices or {}, dt_util.now(), correction=self._correction
             )
         return attributes
+
+
+class PolishEnergyDepositSensor(
+    CoordinatorEntity[EnergyPriceCoordinator], SensorEntity
+):
+    """Estimated prosumer deposit balance after the last finished month."""
+
+    _unrecorded_attributes = frozenset(
+        {
+            "Transze",
+            "Najbliższe wygaśnięcie",
+            "Bieżący miesiąc",
+            "Saldo startowe [PLN]",
+            "Miesiąc salda startowego",
+        }
+    )
+    _attr_has_entity_name = True
+    _attr_name = "Szacowany stan depozytu"
+    _attr_icon = "mdi:piggy-bank"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_suggested_display_precision = 2
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        coordinator: EnergyPriceCoordinator,
+        price_sensor: PolishEnergyPriceSensor,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._manager = entry.runtime_data.deposit_statistics
+        self._attr_unique_id = f"{entry.entry_id}_deposit_balance"
+        self._attr_device_info = price_sensor.device_info
+
+    @property
+    def available(self) -> bool:
+        """Available once an estimate has been computed."""
+
+        return super().available and self._manager.result is not None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the balance in PLN."""
+
+        if self._manager.result is None:
+            return None
+        return round(sum(t.remaining for t in self._manager.result["tranches"]), 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the tranches, the nearest expiry and the month in progress."""
+
+        result = self._manager.result
+        if result is None:
+            return {}
+        tranches = result["tranches"]
+        settings = {**self._entry.data, **self._entry.options}
+        nearest = tranches[0] if tranches else None
+        return {
+            "Transze": [
+                {
+                    "Miesiąc energii": t.month,
+                    "Wygasa po rozliczeniu miesiąca": expires_after(t),
+                    "Pozostało [PLN]": round(t.remaining, 2),
+                }
+                for t in tranches
+            ],
+            "Najbliższe wygaśnięcie": (
+                {
+                    "Miesiąc": expires_after(nearest),
+                    "Kwota [PLN]": round(nearest.remaining, 2),
+                    "Szacowany zwrot [PLN]": round(expiry_refund(nearest), 2),
+                }
+                if nearest
+                else None
+            ),
+            "Bieżący miesiąc": {
+                "Miesiąc": result["month"],
+                "Koszt dotychczas [PLN]": round(result["cost"], 2),
+                "Wpływ dotychczas wg ostatniej znanej RCEm [PLN]": (
+                    None if result["inflow"] is None else round(result["inflow"], 2)
+                ),
+            },
+            "Saldo startowe [PLN]": settings[CONF_DEPOSIT_BALANCE],
+            "Miesiąc salda startowego": str(settings[CONF_DEPOSIT_MONTH])[:7],
+        }

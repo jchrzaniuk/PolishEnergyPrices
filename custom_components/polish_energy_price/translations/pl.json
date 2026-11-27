@@ -90,9 +90,11 @@
       },
       "export_statistic": {
         "title": "Statystyka energii oddanej do sieci",
-        "description": "Wybierz narastającą statystykę energii ODDANEJ do sieci (nie pobranej). Integracja utworzy na jej podstawie narastającą statystykę zwrotu w PLN dla rozliczenia RCEm.",
+        "description": "Wybierz narastającą statystykę energii ODDANEJ do sieci (nie pobranej). Integracja utworzy na jej podstawie narastającą statystykę zwrotu w PLN dla rozliczenia RCEm. Opcjonalnie podaj saldo depozytu z faktury i dowolny dzień miesiąca, na koniec którego to saldo obowiązuje — integracja utworzy czujnik Szacowany stan depozytu. Wymaga statystyk poboru przypisanych do stref.",
         "data": {
-          "export_statistic": "Statystyka energii oddanej do sieci"
+          "export_statistic": "Statystyka energii oddanej do sieci",
+          "deposit_balance": "Saldo depozytu z faktury [PLN] (opcjonalnie)",
+          "deposit_month": "Miesiąc salda depozytu (opcjonalnie)"
         }
       }
     },
@@ -177,9 +179,11 @@
       },
       "export_statistic": {
         "title": "Statystyka energii oddanej do sieci",
-        "description": "Wybierz narastającą statystykę energii ODDANEJ do sieci (nie pobranej). Integracja utworzy na jej podstawie narastającą statystykę zwrotu w PLN dla rozliczenia RCEm.",
+        "description": "Wybierz narastającą statystykę energii ODDANEJ do sieci (nie pobranej). Integracja utworzy na jej podstawie narastającą statystykę zwrotu w PLN dla rozliczenia RCEm. Opcjonalnie podaj saldo depozytu z faktury i dowolny dzień miesiąca, na koniec którego to saldo obowiązuje — integracja utworzy czujnik Szacowany stan depozytu. Wymaga statystyk poboru przypisanych do stref.",
         "data": {
-          "export_statistic": "Statystyka energii oddanej do sieci"
+          "export_statistic": "Statystyka energii oddanej do sieci",
+          "deposit_balance": "Saldo depozytu z faktury [PLN] (opcjonalnie)",
+          "deposit_month": "Miesiąc salda depozytu (opcjonalnie)"
         }
       }
     },
@@ -218,6 +222,10 @@
     "compensation_rcem_failed": {
       "title": "Statystyka zwrotu RCEm nie została utworzona",
       "description": "Nie udało się utworzyć statystyki zwrotu RCEm dla wpisu {entry}. Przyczyna: {reason}. Po usunięciu przyczyny ta naprawa zniknie sama przy następnym odświeżeniu (co godzinę albo po ponownym uruchomieniu wpisu)."
+    },
+    "deposit_failed": {
+      "title": "Szacowany stan depozytu nie został obliczony",
+      "description": "Nie udało się obliczyć szacowanego stanu depozytu dla wpisu {entry}. Przyczyna: {reason}. Po usunięciu przyczyny ta naprawa zniknie sama przy następnym odświeżeniu (co godzinę albo po ponownym uruchomieniu wpisu)."
     }
   }
 }

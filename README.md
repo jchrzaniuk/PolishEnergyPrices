@@ -562,14 +562,85 @@ Pozostałe zasady:
 
 #### Czego statystyka nie robi
 
-- Nie liczy salda depozytu prosumenckiego, jego wygasania ani zwrotu
+- Sama nie liczy salda depozytu prosumenckiego, jego wygasania ani zwrotu
   niewykorzystanych środków. Pokazuje wartość energii oddanej, jaka trafia do
-  depozytu.
+  depozytu. Szacunek salda daje osobny czujnik, opisany w sekcji
+  [Szacowany stan depozytu](#szacowany-stan-depozytu).
 - Nie dolicza VAT ani akcyzy. RCEm jest ceną netto, a jedynym mnożnikiem jest
   współczynnik korygujący depozytu.
 - Działa tylko w Home Assistant, bo korzysta z bazy statystyk rejestratora.
   Usługa Docker i MQTT publikują wyłącznie bieżącą cenę.
 - Nie jest potrzebna w trybie RCE.
+
+### Szacowany stan depozytu
+
+Czujnik **Szacowany stan depozytu** (PLN) szacuje saldo depozytu prosumenckiego
+z uwzględnieniem wygasania środków. Z faktury znasz saldo na koniec jednego
+miesiąca (np. 31.12.2025); integracja liczy je dalej, miesiąc po miesiącu.
+
+#### Skąd dane
+
+- saldo z faktury i miesiąc, na koniec którego obowiązuje — podajesz je w
+  kroku **Statystyka energii oddanej do sieci** (oba pola są opcjonalne;
+  wystarczy dowolny dzień tego miesiąca),
+- energia oddana: miesięczne sumy ze statystyki energii oddanej,
+- koszt energii: miesięczne sumy statystyk poboru przypisanych do stref taryfy,
+  pomnożone przez cenę energii czynnej brutto danej strefy (z akcyzą, z VAT;
+  bez dystrybucji i opłat stałych),
+- RCEm: ceny z koordynatora (14 ostatnich miesięcy). Starsze integracja
+  pobiera z archiwum na stronie PSE, zapisuje w pamięci wpisu i nie pobiera
+  ponownie.
+
+#### Reguły z ustawy o OZE (tekst jedn. Dz.U. 2026 poz. 68)
+
+1. Wpływ za miesiąc energii M = energia oddana w M × RCEm(M) × współczynnik:
+   1,23 dla M od 2025-02, 1,0 dla wcześniejszych (art. 4c ust. 4 oraz art. 31
+   ustawy Dz.U. 2024 poz. 1847). Czujnik używa tego ustawowego współczynnika,
+   a nie pola **Współczynnik korygujący depozytu**.
+2. Wpływ z M trafia na konto w miesiącu M+1 (art. 4c ust. 4).
+3. Depozyt pokrywa tylko koszt energii czynnej brutto, bez dystrybucji i opłat
+   stałych (art. 4c ust. 2-3).
+4. Najpierw rozlicza się najstarsze środki, czyli FIFO (art. 4c ust. 7).
+5. Środki z M można rozliczać przez 12 miesięcy od przypisania (art. 4c ust. 5);
+   ostatni koszt, który może pokryć transzę M, to koszt miesiąca M+12. Potem
+   reszta wygasa. Zwrot to mniej z dwóch kwot: reszty i 20% × energia(M) ×
+   RCEm(M), bez współczynnika 1,23 (art. 4 ust. 11a pkt 1); nadwyżka przepada
+   (art. 4c ust. 6).
+
+#### Przyjęte uproszczenia
+
+- Krok miesięczny. Na koniec miesiąca C: koszt C pokrywają transze przypisane
+  do końca C (energia z miesięcy do C-1), nadwyżka kosztu ponad saldo nie jest
+  przenoszona (płaci ją klient); potem przypisywana jest transza za C; na końcu
+  wygasają transze, których miesiąc M+12 minął.
+- Saldo z faktury to stan po rozliczeniu kosztu miesiąca salda, bez transzy za
+  ten miesiąc. Rozpisanie na transze bierze energię z 11 miesięcy przed
+  miesiącem salda, od najnowszej wstecz, aż suma zrówna się z saldem (transza
+  graniczna częściowo). Transza sprzed 12 miesięcy wygasła już wtedy. Jeśli
+  saldo jest większe niż wpływy z tych miesięcy, pojawia się naprawa i czujnik
+  nie jest liczony.
+- Stan czujnika to saldo po ostatnim zakończonym miesiącu. Bieżący miesiąc
+  (koszt i wpływ dotychczas) jest tylko w atrybutach; jego wpływ liczony jest
+  wg ostatniej znanej RCEm. Transza za ostatni zakończony miesiąc pojawia się
+  dopiero po publikacji jego RCEm (ok. 11. dnia).
+- Koszt liczony jest według aktualnych cen energii wpisu, także dla miesięcy
+  sprzed ich zmiany.
+- Zwrot za wygasłe środki jest tylko szacunkiem w atrybutach i nie zmienia
+  salda.
+- Zakładamy, że statystyki poboru i oddania są już po bilansowaniu godzinowym
+  (art. 4 ust. 2b); integracja go nie liczy.
+
+#### Wymagania
+
+Rozliczenie RCEm, statystyka zwrotu, statystyki poboru przypisane do wszystkich
+stref taryfy (most kosztów), taryfa inna niż G13s i G14dynamic oraz saldo
+z miesiącem. Bez któregoś z nich czujnik nie powstaje.
+
+#### To szacunek
+
+Wynik różni się od eBOK między fakturami: różnice w cenach, w
+bilansowaniu godzinowym i w momencie księgowania. Po każdej nowej fakturze
+podaj nowe saldo i miesiąc w opcjach.
 
 ### Usługa Docker: HTTP i MQTT
 
@@ -588,8 +659,8 @@ i listą okresów oraz skalary `export_price_net`, `export_raw_net`,
 `export_period` i `export_settlement`. Profile bez rozliczenia eksportu nie
 otrzymują tych tematów.
 
-Opłaty stałe, zwrot niewykorzystanych środków depozytu ani salda miesięczne
-nie są w zakresie projektu. Sam limit zwrotu zależy od trybu rozliczenia:
+Opłaty stałe i salda miesięczne nie są w zakresie usługi Docker. Szacunek
+salda depozytu liczy tylko integracja Home Assistant. Sam limit zwrotu zależy od trybu rozliczenia:
 środki niewykorzystane w ciągu 12 miesięcy podlegają zwrotowi do 20% wartości
 depozytu miesięcznego przy RCEm, a od 1.02.2025 do 30% przy rozliczeniu
 godzinowym RCE.

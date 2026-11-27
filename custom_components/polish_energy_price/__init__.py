@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from .compensation_statistics import RcemCompensationStatisticsManager
     from .coordinator import EnergyPriceCoordinator
     from .cost_statistics import ExternalCostStatisticsManager
+    from .deposit_statistics import DepositStatisticsManager
 
 
 @dataclass(slots=True)
@@ -21,6 +22,7 @@ class PolishEnergyPriceRuntimeData:
     coordinator: EnergyPriceCoordinator
     cost_statistics: ExternalCostStatisticsManager | None = None
     compensation_statistics: RcemCompensationStatisticsManager | None = None
+    deposit_statistics: DepositStatisticsManager | None = None
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -34,6 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .const import PLATFORMS
     from .coordinator import EnergyPriceCoordinator
     from .cost_statistics import ExternalCostStatisticsManager
+    from .deposit_statistics import DepositStatisticsManager
 
     coordinator = EnergyPriceCoordinator(hass, entry)
     await coordinator.async_initialize()
@@ -41,11 +44,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     compensation_statistics = RcemCompensationStatisticsManager(
         hass, entry, coordinator
     )
+    deposit_statistics = DepositStatisticsManager(hass, entry, coordinator)
     entry.runtime_data = PolishEnergyPriceRuntimeData(
-        coordinator, cost_statistics, compensation_statistics
+        coordinator, cost_statistics, compensation_statistics, deposit_statistics
     )
     await cost_statistics.async_refresh()
     await compensation_statistics.async_refresh()
+    await deposit_statistics.async_refresh()
     entry.async_on_unload(
         async_track_time_interval(
             hass, cost_statistics.async_refresh, timedelta(hours=1)
@@ -54,6 +59,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(
         async_track_time_interval(
             hass, compensation_statistics.async_refresh, timedelta(hours=1)
+        )
+    )
+    entry.async_on_unload(
+        async_track_time_interval(
+            hass, deposit_statistics.async_refresh, timedelta(hours=1)
         )
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -76,3 +86,4 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     from .const import DOMAIN
 
     ir.async_delete_issue(hass, DOMAIN, f"compensation_rcem_{entry.entry_id}")
+    ir.async_delete_issue(hass, DOMAIN, f"deposit_{entry.entry_id}")

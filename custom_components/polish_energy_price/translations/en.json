@@ -90,9 +90,11 @@
       },
       "export_statistic": {
         "title": "Grid-export energy statistic",
-        "description": "Choose the cumulative statistic of energy EXPORTED to the grid (not consumed). The integration builds a cumulative PLN compensation statistic from it for RCEm settlement.",
+        "description": "Choose the cumulative statistic of energy EXPORTED to the grid (not consumed). The integration builds a cumulative PLN compensation statistic from it for RCEm settlement. Optionally enter the deposit balance from your invoice and any day of the month at the end of which it applies — the integration then creates the Estimated deposit balance sensor. It needs consumption statistics mapped to tariff zones.",
         "data": {
-          "export_statistic": "Grid-export energy statistic"
+          "export_statistic": "Grid-export energy statistic",
+          "deposit_balance": "Deposit balance from the invoice [PLN] (optional)",
+          "deposit_month": "Deposit balance month (optional)"
         }
       }
     },
@@ -177,9 +179,11 @@
       },
       "export_statistic": {
         "title": "Grid-export energy statistic",
-        "description": "Choose the cumulative statistic of energy EXPORTED to the grid (not consumed). The integration builds a cumulative PLN compensation statistic from it for RCEm settlement.",
+        "description": "Choose the cumulative statistic of energy EXPORTED to the grid (not consumed). The integration builds a cumulative PLN compensation statistic from it for RCEm settlement. Optionally enter the deposit balance from your invoice and any day of the month at the end of which it applies — the integration then creates the Estimated deposit balance sensor. It needs consumption statistics mapped to tariff zones.",
         "data": {
-          "export_statistic": "Grid-export energy statistic"
+          "export_statistic": "Grid-export energy statistic",
+          "deposit_balance": "Deposit balance from the invoice [PLN] (optional)",
+          "deposit_month": "Deposit balance month (optional)"
         }
       }
     },
@@ -218,6 +222,10 @@
     "compensation_rcem_failed": {
       "title": "RCEm export compensation statistic was not created",
       "description": "The RCEm export compensation statistic could not be created for the entry {entry}. Reason: {reason}. Once the cause is fixed, this repair disappears by itself on the next refresh (hourly, or after the entry is reloaded)."
+    },
+    "deposit_failed": {
+      "title": "Estimated deposit balance was not calculated",
+      "description": "The estimated deposit balance could not be calculated for the entry {entry}. Reason: {reason}. Once the cause is fixed, this repair disappears by itself on the next refresh (hourly, or after the entry is reloaded)."
     }
   }
 }
